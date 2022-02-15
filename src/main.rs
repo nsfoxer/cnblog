@@ -6,35 +6,35 @@ use std::path::Path;
 use std::fs;
 use std::io::{stdout, stdin, Write};
 
-use meta_weblog::rpc::MetaWeblog;
-use xmlrpc::Request;
+use xmlrpc::{Request, Error};
 use xmlrpc::Value;
 
 mod meta_weblog;
 use meta_weblog::weblog::{BlogInfo, Post, CategoryInfo};
-
+use meta_weblog::rpc::MetaWeblog;
+use meta_weblog::cfg::Config;
 use crate::meta_weblog::weblog::WpCategory;
 
 
 fn main() {
-    let metaweblog = MetaWeblog::new("username".to_string(),
-        "password".to_string(),
-        "123".to_string());
+    // let metaweblog = MetaWeblog::new("username".to_string(),
+    //     "password".to_string(),
+    //     "123".to_string());
     
-    let p = metaweblog.get_post("15209798").unwrap();
+    // let p = metaweblog.get_post("15209798").unwrap();
     
-    //let postid = metaweblog.new_post(p, true).unwrap();
-    let mut category = WpCategory::default();
-    category.parent_id = -1;
-    category.name = "Test!!!".to_string();
-    let id = metaweblog.new_category(category).unwrap();
-    println!("{:#?}", id);
+    // //let postid = metaweblog.new_post(p, true).unwrap();
+    // let mut category = WpCategory::default();
+    // category.parent_id = -1;
+    // category.name = "Test!!!".to_string();
+    // let id = metaweblog.new_category(category).unwrap();
+    // println!("{:#?}", id);
    
-    init_user_cfg();
+    init_user_cfg("~/.cnblog/");
 }
 
 /// init user config
-fn init_user_cfg(base_path: &str) {
+fn init_user_cfg(base_path: &str) -> Result<(), Error>{
     // Make sure the dictory exsts
     let path = Path::new(base_path);
     if path.exists() {
@@ -48,13 +48,16 @@ fn init_user_cfg(base_path: &str) {
     }
     
     // Check whether the user information file exists
-    let user_path = path.join(USER_INFO_CFG).as_path();
-    if path.exists() {
-        return;
+    let user_path = path.join(USER_INFO_CFG);
+    let user_path = user_path.as_path();
+    if user_path.exists() {
+        return Ok(());
     }
     // When false, we need to ask the user for their account and password
     let (username, password) = ask_question();
-    check_account(username.as_str(), password.as_str());
+    Config::check_account(username.as_str(), password.as_str())?;
+
+    Ok(())
 }
 
 /// ask username and password
@@ -81,6 +84,4 @@ fn ask_question() -> (String, String) {
     (username, password)
 }
 
-fn check_account(username: &str, password: &str) {
-    
-}
+
