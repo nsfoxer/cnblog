@@ -1,6 +1,6 @@
 extern crate xmlrpc;
 
-use crate::meta_weblog::cfg::USER_INFO_CFG;
+use crate::meta_weblog::cfg::{USER_INFO_CFG, BLOGS_INFO_CFG};
 use std::fs::File;
 use std::path::Path;
 use std::fs;
@@ -17,10 +17,11 @@ use crate::meta_weblog::weblog::WpCategory;
 
 
 fn main() {
-    // let metaweblog = MetaWeblog::new("username".to_string(),
-    //     "password".to_string(),
-    //     "123".to_string());
-    
+    let metaweblog = MetaWeblog::new("username".to_string(),
+        "password".to_string(),
+        "123".to_string());
+    dbg!(metaweblog.get_categories().unwrap());
+
     // let p = metaweblog.get_post("15209798").unwrap();
     
     // //let postid = metaweblog.new_post(p, true).unwrap();
@@ -30,12 +31,12 @@ fn main() {
     // let id = metaweblog.new_category(category).unwrap();
     // println!("{:#?}", id);
    
-    init_user_cfg("~/.cnblog/");
+    //init_user_cfg("~/.cnblog/");
 }
 
 /// init user config
 fn init_user_cfg(base_path: &str) -> Result<(), Error>{
-    // Make sure the dictory exsts
+    // Make sure the dictory exsits
     let path = Path::new(base_path);
     if path.exists() {
         if !path.is_dir() {
@@ -56,7 +57,18 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error>{
     // When false, we need to ask the user for their account and password
     let (username, password) = ask_question();
     Config::check_account(username.as_str(), password.as_str())?;
-
+    
+    // Check whether the master postid exists
+    let num = Config::try_get_master_postid(&username, &password)?; 
+    
+    if num == 0 {
+       // Now we need to create new blog info 
+       let blogs_path = path.join(BLOGS_INFO_CFG);
+       let blogs_path = blogs_path.as_path();
+       Config::init_blogs_cfg(&username, &password, blogs_path);
+    } else {
+        todo!("download blogs_info file from remote cnblog");
+    }
     Ok(())
 }
 
