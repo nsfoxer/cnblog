@@ -5,6 +5,7 @@ use std::fs::File;
 use std::path::Path;
 use std::fs;
 use std::io::{stdout, stdin, Write};
+use std::slice::Concat;
 
 use xmlrpc::{Request, Error};
 use xmlrpc::Value;
@@ -66,8 +67,10 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error>{
        let blogs_path = path.join(BLOGS_INFO_CFG);
        let blogs_path = blogs_path.as_path();
        Config::init_blogs_cfg(&username, &password, blogs_path);
+       Config::upload_new_blogs_cfg(&username, &password, blogs_path);
     } else {
         todo!("download blogs_info file from remote cnblog");
+        download_blogs_info();
     }
     Ok(())
 }

@@ -9,6 +9,8 @@ proc-macro = true
 path = "src/lib.rs"
 
 [dependencies]
+base64 = "0.13.0"
+chrono = "0.4.19"
 iso8601 = "0.4.1"
 proc-macro2 = "1.0.36"
 quote = "1.0.15"
