@@ -62,15 +62,15 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error>{
     // Check whether the master postid exists
     let num = Config::try_get_master_postid(&username, &password)?; 
     
+    let blogs_path = path.join(BLOGS_INFO_CFG);
+    let blogs_path = blogs_path.as_path();
     if num == 0 {
-       // Now we need to create new blog info 
-       let blogs_path = path.join(BLOGS_INFO_CFG);
-       let blogs_path = blogs_path.as_path();
+       // Now we need to create a new blog info 
        Config::init_blogs_cfg(&username, &password, blogs_path);
-       Config::upload_new_blogs_cfg(&username, &password, blogs_path);
+       let postid = Config::upload_new_blogs_cfg(&username, &password, blogs_path);
     } else {
         todo!("download blogs_info file from remote cnblog");
-        download_blogs_info();
+        Config::download_blogs_info(postid, blogs_path);
     }
     Ok(())
 }
