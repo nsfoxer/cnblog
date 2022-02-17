@@ -1,14 +1,15 @@
 use std::path::PathBuf;
 use std::{path::Path, io::Read};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 
 use regex::Regex;
 use base64;
+use tempfile::{tempfile, NamedTempFile};
 use xmlrpc::Error;
 use rusqlite::{Connection, OpenFlags, params};
 use chrono::prelude::*;
-
+use serde::{Serialize, Deserialize};
 
 use super::rpc::MetaWeblog;
 use super::weblog::{Post, WpCategory};
@@ -18,25 +19,36 @@ pub const USER_INFO_CFG: &str = "user_info.json";
 
 const MASTER_BLOGS_CFG: &str = "MASTER_CNBLOG_BLOGS_INFO_CFG";
 
+/// user info config
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserInfo {
+    pub username: String,
+    pub password: String,
+    pub blogid: String,
+    pub postid: i32,
+}
+
 pub struct Config {
     master_postid: i32,
 
     blogs_info_cfg_path:  PathBuf,
     weblog: MetaWeblog,
+    temp_data_file: NamedTempFile,
 }
 
 impl Config {
     /// create a new Config
-    pub fn new(username: &str, password: &str, master_postid: i32, base_path: &str) -> Self {
+    pub fn new(username: &str, password: &str, master_postid: i32, blogid: &str, base_path: &str) -> Self {
         let blogs_path = PathBuf::from(base_path).join(MASTER_BLOGS_CFG);
         let weblog = MetaWeblog::new(
             username.to_string(), 
             password.to_string(),
-            "123".to_string());
+            blogid.to_string());
         Config {
             weblog,
             master_postid,
-            blogs_info_cfg_path: blogs_path
+            blogs_info_cfg_path: blogs_path,
+            temp_data_file: NamedTempFile::new().unwrap(),
         }
     }
 
@@ -69,7 +81,7 @@ impl Config {
     }
 
     /// init blogs cfg
-    pub fn init_blogs_cfg(username: &str, password: &str, blogs_path: &Path) {
+    pub fn init_blogs_cfg(blogs_path: &Path) {
         if blogs_path.exists() {
             eprintln!("blogs_path should be not exists! But it's existed!");
             return;
@@ -97,6 +109,8 @@ impl Config {
             );", []).unwrap();
     }
 
+    /// Upload a new blogs config file
+    /// Will get a new postid for blogs info and generate a new category with postid
     pub fn upload_new_blogs_cfg(username: &str, password: &str, blogs_path: &Path) -> i32 {
         // 1. get a new postid for blogs 
         let weblog = MetaWeblog::new(
@@ -117,9 +131,8 @@ impl Config {
         let conn = Connection::open_with_flags(blogs_path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
         conn.execute("\
             insert into BlogsInfo (blog_path, postid, datetime)\
-            values (?, ?, ?)",
-     params![MASTER_BLOGS_CFG, postid, now]);
-        drop(conn);
+            values (?, ?, ?)",params![MASTER_BLOGS_CFG, postid, now]);
+        drop(conn);  // Saved database to upload file
 
         // 4. upload database
         post.description = Config::file2base64(blogs_path);
@@ -129,9 +142,9 @@ impl Config {
         postid
     }
 
-    /// download blogs from 
+    /// download blogs from cnblog to blogs_path
     pub fn download_blogs_info(&self) {
-        self.download_blogs_info();
+        self.download_blogs_info_to_path(self.blogs_info_cfg_path.as_path());
     }
     fn download_blogs_info_to_path(&self, path: &Path) {
         // 1. download blogs info 
@@ -162,6 +175,53 @@ impl Config {
         // 2. write file
         let mut f = File::create(file_path).unwrap();
         f.write_all(&bytes).unwrap();
-        
     }
+
+    /// Write user basic info
+    pub fn write_user_info_cfg(username: &str, password: &str, postid:i32, user_info_path: &Path) {
+        if user_info_path.exists() {
+            println!("The {:?} file already exists!!!\nI'will overwrite it!", user_info_path);
+        }
+        // Get real blogid by using a fake value
+        let weblog = MetaWeblog::new(
+            username.to_string(),
+            password.to_string(),
+            "123".to_string());
+        let userblogs = weblog.get_users_blogs().unwrap();
+        let userblog = userblogs.get(0).unwrap();
+        let blogid = userblog.blogid.clone();
+
+        // Serialize User Info
+        let user_info = UserInfo {
+            username: username.to_string(),
+            password: password.to_string(),
+            postid,
+            blogid,
+        };
+        let serialize = serde_json::to_string(&user_info).unwrap();
+        
+        // Write user info path
+        fs::write(user_info_path, serialize).expect("Unable to write file for user_info");
+    }
+
+    /// Read user basic info
+    pub fn read_user_info_cfg(user_info_path: &Path) -> Option<UserInfo> {
+        // check the legitimacy of user information  path 
+        if !user_info_path.exists() {
+            None
+        }
+
+        // read user information
+        let deserialization = fs::read_to_string(user_info_path).unwrap();
+        
+        // convert user information
+        serde_json::from_str(&deserialization).expect("Unable to parse user info file!")
+    }
+    
+    pub fn check_blogs_info_update(&self) {
+        // download
+        self.download_blogs_info_to_path(self.temp_data_file.path());
+        todo!("read database from remote blogs info, compare timestamp");
+    }
+
 }

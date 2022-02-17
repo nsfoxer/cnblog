@@ -17,9 +17,9 @@ pub struct UserBlogs {
 #[allow(non_snake_case)]
 #[derive(Default, Debug, Convert)]
 pub struct BlogInfo {
-    blogid: String,
-    url: String,
-    blogName: String,
+    pub blogid: String,
+    pub url: String,
+    pub blogName: String,
 }
 
 impl Post {
