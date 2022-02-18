@@ -49,7 +49,7 @@ impl Post {
 
 // Post
 #[allow(non_snake_case)]
-#[derive(Debug, Default, Convert)]
+#[derive(Debug, Default, Clone, Convert)]
 pub struct Post {
     pub dateCreated: DateTime,
     pub description: String,

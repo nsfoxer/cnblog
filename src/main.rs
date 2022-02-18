@@ -2,7 +2,6 @@ extern crate xmlrpc;
 
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::fs;
-use std::fs::File;
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
 
@@ -58,7 +57,15 @@ fn _main() {
     );
 
     // check blogs update
-    cfg.check_blogs_info_update();
+    if cfg.check_blogs_info_update() {
+        todo!("download remote new blog;");
+        todo!("update remote changed blog");
+        todo!("move remote deleted blog;");
+        todo!("overwrite local blogs info");
+    }
+    todo!("update local changed blog and upload");
+    todo!("update categories");
+    todo!("update(save) local blogs info and upload;");
 }
 
 /// init user config

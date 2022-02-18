@@ -34,6 +34,8 @@ pub struct Config {
     blogs_info_cfg_path:  PathBuf,
     weblog: MetaWeblog,
     temp_data_file: NamedTempFile,
+    local_conn: Connection,
+    cnblog_conn: Connection,
 }
 
 impl Config {
@@ -44,11 +46,14 @@ impl Config {
             username.to_string(), 
             password.to_string(),
             blogid.to_string());
+        
         Config {
             weblog,
             master_postid,
             blogs_info_cfg_path: blogs_path,
             temp_data_file: NamedTempFile::new().unwrap(),
+            local_conn: Connection::open_in_memory().unwrap(),
+            cnblog_conn: Connection::open_in_memory().unwrap(),
         }
     }
 
@@ -101,11 +106,14 @@ impl Config {
                 id integer primary key, -- primary key
                 blog_path nvarchar,  -- local blog path
                 postid integer,      -- postid of remote corresponding blog
-                datetime integer,    -- last upload timestamp
+                timestamp integer,    -- last upload timestamp
+                deleted BOOLEAN not null check (deleted in (0, 1)), -- whether is deleted        
+
             );
             create table Category (
                 id integer primary key, -- primary key (be meaningless)
-                category nvarchar,      --  category name
+                category nvarchar,      -- category name
+                num integer,            -- number of category used
             );", []).unwrap();
     }
 
@@ -117,7 +125,7 @@ impl Config {
             username.to_string(), password.to_string(), "123".to_string());
         let mut post = Post::default();
         post.title = "[CNBLOG]BLOGS_INFO_CFG".to_string();
-        let postid: i32 = weblog.new_post(post, false).unwrap().parse().unwrap();
+        let postid: i32 = weblog.new_post(post.clone(), false).unwrap().parse().unwrap();
 
         // 2. upload new category
         let category =  format!("{}[CNBLOG]", postid);
@@ -131,7 +139,7 @@ impl Config {
         let conn = Connection::open_with_flags(blogs_path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
         conn.execute("\
             insert into BlogsInfo (blog_path, postid, datetime)\
-            values (?, ?, ?)",params![MASTER_BLOGS_CFG, postid, now]);
+            values (?, ?, ?, ?)",params![MASTER_BLOGS_CFG, postid, now, 1]);
         drop(conn);  // Saved database to upload file
 
         // 4. upload database
@@ -157,7 +165,7 @@ impl Config {
     /// convert file to base64 string
     fn file2base64(file_path: &Path) -> String{
         // 1. read content
-        let f = File::open(file_path).unwrap(); 
+        let mut f = File::open(file_path).unwrap(); 
         let mut buffer = Vec::<u8>::new();
         f.read_to_end(&mut buffer).unwrap();
 
@@ -206,22 +214,45 @@ impl Config {
 
     /// Read user basic info
     pub fn read_user_info_cfg(user_info_path: &Path) -> Option<UserInfo> {
-        // check the legitimacy of user information  path 
+        // check the legitimacy of user information path 
         if !user_info_path.exists() {
-            None
+            return None;
         }
 
         // read user information
         let deserialization = fs::read_to_string(user_info_path).unwrap();
         
         // convert user information
-        serde_json::from_str(&deserialization).expect("Unable to parse user info file!")
+        let user_info = serde_json::from_str(&deserialization).expect("Unable to parse user info file!");
+        Some(user_info)
     }
     
-    pub fn check_blogs_info_update(&self) {
-        // download
-        self.download_blogs_info_to_path(self.temp_data_file.path());
-        todo!("read database from remote blogs info, compare timestamp");
+    /// check blogs info for updates
+    pub fn check_blogs_info_update(&self) -> bool{
+        let local_timestamp: i32 = self.local_conn.query_row("
+            select timestamp from BlogsInfo where postid = ?
+            ", [self.master_postid], |row| row.get(0)).unwrap();
+        let remote_timestamp: i32 = self.cnblog_conn.query_row("
+            select timestamp from BlogsInfo where postid = ?", 
+            [self.master_postid], |row| row.get(0)).unwrap();
+        if remote_timestamp > local_timestamp {
+            return true;
+        }
+        if local_timestamp > remote_timestamp {
+            panic!("local blogs info is newer than remote");
+        }
+        return false;
     }
 
+    /// init Config loalc and remote Conn
+    pub fn init_conn(&mut self) {
+        // 1. init local conn
+        self.local_conn = Connection::open(self.blogs_info_cfg_path.as_path()).unwrap();
+
+        // 2. download blogs info
+        self.download_blogs_info_to_path(self.temp_data_file.path());
+
+        // 3. init remote blogs conn
+        self.cnblog_conn = Connection::open(self.temp_data_file.path()).unwrap();
+    }
 }
