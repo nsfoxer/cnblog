@@ -38,18 +38,21 @@ fn _main() {
     let base_path_str = "config/";
     init_user_cfg(base_path_str);
 
+    let blog_root_path_str = "articles/";
+
     // get user info
     let base_path = Path::new(base_path_str);
     let user_info = Config::read_user_info_cfg(&base_path.join(USER_INFO_CFG)).unwrap();
 
     // init config & weblog
-    let cfg = Config::new(
+    let mut cfg = Config::new(
         &user_info.username,
         &user_info.password,
         user_info.postid,
         &user_info.blogid,
         base_path_str,
     );
+    cfg.init_conn(); // must call it 
     let weblog = MetaWeblog::new(
         user_info.username.to_string(),
         user_info.password.to_string(),
@@ -66,6 +69,12 @@ fn _main() {
     todo!("update local changed blog and upload");
     todo!("update categories");
     todo!("update(save) local blogs info and upload;");
+}
+
+/// compare local and remote info to download new blog
+/// need to modify timestamp of new blog
+fn download_remote_new_blog(cfg: &mut Config, root_path: &str) {
+    cfg.get_new_blogs_info();
 }
 
 /// init user config
