@@ -1,11 +1,15 @@
 extern crate xmlrpc;
+extern crate filetime;
 
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::fs;
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
+use std::time::SystemTime;
 
-use xmlrpc::Value;
+
+use chrono::prelude::*;
+use filetime::FileTime;
 use xmlrpc::{Error, Request};
 
 mod meta_weblog;
@@ -73,8 +77,31 @@ fn _main() {
 
 /// compare local and remote info to download new blog
 /// need to modify timestamp of new blog
-fn download_remote_new_blog(cfg: &mut Config, root_path: &str) {
-    cfg.get_new_blogs_info();
+fn download_remote_new_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path: &str) {
+    // 1. get new blogsinfo by comparing remote and local database
+    let blogs_info_do = cfg.get_new_blogs_info();
+    
+    // 2. download blog by postid and save
+    let path = Path::new(root_path);
+    for blog_info_do in blogs_info_do {
+        // a. download
+        let blog = weblog.get_post(blog_info_do.postid.to_string().as_str()).unwrap();
+
+        // b. save blog
+        let blog_path = path.join(blog_info_do.blog_path.as_str());
+        let dir_path = blog_path.parent().unwrap();
+        if !dir_path.exists() {
+            fs::create_dir_all(dir_path).unwrap();
+        }
+        fs::write(blog_path, blog.description);
+
+        // c. change file mtime
+        blog_info_do.timestamp =
+        let mtime = FileTime::from_unix_time
+        filetime::set_file_mtime(p, mtime)
+
+        metadata.modified().unwrap();
+    }
 }
 
 /// init user config

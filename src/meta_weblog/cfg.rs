@@ -351,8 +351,8 @@ impl Config {
 }
 
 pub struct BlogsInfoDO {
-    blog_path: String,
-    postid: i32,
-    timestamp: i64,
-    deleted: bool,
+    pub blog_path: String,
+    pub postid: i32,
+    pub timestamp: i64,
+    pub deleted: bool,
 }
