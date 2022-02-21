@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use std::{io::Read, path::Path};
 
 use base64;
 use chrono::prelude::*;
+use filetime::FileTime;
 use regex::Regex;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
@@ -355,4 +357,28 @@ pub struct BlogsInfoDO {
     pub postid: i32,
     pub timestamp: i64,
     pub deleted: bool,
+}
+
+// function for utility
+pub struct Utility {
+
+}
+
+impl Utility {
+    // read file mtime
+    pub fn read_file_timestamp(file_path: &Path) {
+        let metadata = fs::metadata(file_path).unwrap();
+        let mtime = FileTime::from_last_modification_time(&metadata);
+        let a = mtime.seconds();
+    }
+
+    pub fn systemtime2timestamp(st: &SystemTime) -> u64 {
+        let timestamp = st.duration_since(UNIX_EPOCH).unwrap();
+        timestamp.as_secs()
+    }
+
+    pub fn timestamp2systemtime(ts: u64) {
+        let st = Duration::from_secs(ts);
+        SystemTime::from(st);
+    }
 }
