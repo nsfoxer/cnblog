@@ -5,16 +5,13 @@ use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::fs;
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
-use std::time::SystemTime;
 
 
-use chrono::prelude::*;
 use filetime::FileTime;
 use xmlrpc::{Error, Request};
 
 mod meta_weblog;
-use crate::meta_weblog::weblog::WpCategory;
-use meta_weblog::cfg::Config;
+use meta_weblog::cfg::{Config, Utility};
 use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
@@ -65,7 +62,8 @@ fn _main() {
 
     // check blogs update
     if cfg.check_blogs_info_update() {
-        todo!("download remote new blog;");
+        // todo!("download remote new blog;");
+        download_remote_new_blog(&mut cfg, &mut weblog, blog_root_path_str);
         todo!("update remote changed blog");
         todo!("move remote deleted blog;");
         todo!("overwrite local blogs info");
@@ -93,15 +91,17 @@ fn download_remote_new_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path
         if !dir_path.exists() {
             fs::create_dir_all(dir_path).unwrap();
         }
-        fs::write(blog_path, blog.description);
+        fs::write(blog_path.as_path(), blog.description).unwrap();
 
         // c. change file mtime
-        blog_info_do.timestamp =
-        let mtime = FileTime::from_unix_time
-        filetime::set_file_mtime(p, mtime)
-
-        metadata.modified().unwrap();
+        Utility::modify_file_timestamp(blog_path.as_path(), blog_info_do.timestamp);
     }
+}
+
+/// update changedblog by remote blog info
+fn update_remote_changed_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path: &str) {
+    // 1. get changed blogsinfo by comparing remote and local database
+    
 }
 
 /// init user config

@@ -185,7 +185,7 @@ impl Config {
         postid
     }
 
-    /// download blogs from cnblog to blogs_path
+    /// download blogs info from cnblog to blogs_path
     pub fn download_blogs_info(&self) {
         self.download_blogs_info_to_path(self.blogs_info_cfg_path.as_path());
     }
@@ -359,26 +359,22 @@ pub struct BlogsInfoDO {
     pub deleted: bool,
 }
 
-// function for utility
+/// function for utility
 pub struct Utility {
 
 }
 
 impl Utility {
-    // read file mtime
-    pub fn read_file_timestamp(file_path: &Path) {
+    /// get file mtime
+    pub fn get_file_timestamp(file_path: &Path) -> i64{
         let metadata = fs::metadata(file_path).unwrap();
         let mtime = FileTime::from_last_modification_time(&metadata);
-        let a = mtime.seconds();
+        mtime.unix_seconds()
     }
 
-    pub fn systemtime2timestamp(st: &SystemTime) -> u64 {
-        let timestamp = st.duration_since(UNIX_EPOCH).unwrap();
-        timestamp.as_secs()
-    }
-
-    pub fn timestamp2systemtime(ts: u64) {
-        let st = Duration::from_secs(ts);
-        SystemTime::from(st);
+    /// modify file mtime
+    pub fn modify_file_timestamp(file_path: &Path, timestamp: i64) {
+        let mtime = FileTime::from_unix_time(timestamp, 0);
+        filetime::set_file_mtime(file_path, mtime).unwrap();
     }
 }
