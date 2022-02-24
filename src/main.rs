@@ -101,7 +101,7 @@ fn download_remote_new_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path
 /// update changedblog by remote blog info
 fn update_remote_changed_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get changed blogsinfo by comparing remote and local database
-    
+    cfg.
 }
 
 /// init user config

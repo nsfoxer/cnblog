@@ -350,6 +350,13 @@ impl Config {
         });
         return btmap;
     }
+
+    /// get changed blogs info 
+    pub fn get_changed_blogs_info() {
+        
+    }
+
+
 }
 
 pub struct BlogsInfoDO {
