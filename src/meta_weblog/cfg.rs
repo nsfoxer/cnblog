@@ -311,10 +311,10 @@ impl Config {
     }
 
     /// get new blogs info by comparing local and remote database
-    pub fn get_new_blogs_info(&self) -> Vec<BlogsInfoDO>{
+    pub fn get_remote_new_blogs_info(&self) -> Vec<BlogsInfoDO>{
         // 1. query local and remote blogs
-        let local_blogs = self.query_blogs_info_do(&self.local_conn);
-        let remote_blogs = self.query_blogs_info_do(&self.cnblog_conn);
+        let local_blogs = self.query_blogs_existed_info_do(&self.local_conn);
+        let remote_blogs = self.query_blogs_existed_info_do(&self.cnblog_conn);
         
         // 2. compare
         let new_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter()
@@ -324,12 +324,23 @@ impl Config {
         return new_blogs;
     }
 
-    fn query_blogs_info_do(&self, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
+    fn query_blogs_existed_info_do(&self, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
+        self.query_blogs_info_do("where deleted = 0", conn)
+    }
+    fn query_blogs_not_existed_info_do(&self, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
+        self.query_blogs_info_do("where deleted = 1", conn)
+    }
+
+    fn query_blogs_info_do(&self, sql_suffix: &str, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
         // 1. prepare sql
         let sql = "\
             select blog_path, postid, timestamp \
             from BlogsInfo where deleted = 0";
-        let mut stmt = self.local_conn.prepare(sql).unwrap();
+        let sql = "\
+            select blog_path, postid, timestamp \
+            from BlogsInfo ".to_string() + sql_suffix;
+
+        let mut stmt = self.local_conn.prepare(&sql).unwrap();
         
         // 2. get info
         let blogs = stmt
@@ -353,10 +364,10 @@ impl Config {
 
     /// get remote changed blogs info by comparing local and remote database
     /// remote blog is newer than local blog
-    pub fn get_changed_blogs_info(&self) -> Vec<BlogsInfoDO> {
+    pub fn get_remote_changed_blogs_info(&self) -> Vec<BlogsInfoDO> {
         // 1. query local and remote blogs
-        let local_blogs = self.query_blogs_info_do(&self.local_conn);
-        let remote_blogs = self.query_blogs_info_do(&self.cnblog_conn);
+        let local_blogs = self.query_blogs_existed_info_do(&self.local_conn);
+        let remote_blogs = self.query_blogs_existed_info_do(&self.cnblog_conn);
 
         // 2. compare
         let changed_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter().filter(|(postid, remote_blog_info)| {
@@ -364,6 +375,23 @@ impl Config {
             remote_blog_info.timestamp > local_blog_info.timestamp
         }).map(|(_, blog_info)|->BlogsInfoDO {blog_info}).collect();
         return changed_blogs;
+    }
+
+    /// get remote deleted blogs but not local deleted blogs
+    pub fn get_remote_deleted_blogs_info(&self) -> Vec<BlogsInfoDO> {
+        // 1. query local and remote blogs
+        let local_blogs = self.query_blogs_existed_info_do(&self.local_conn);
+        let remote_blogs = self.query_blogs_not_existed_info_do(&self.cnblog_conn);
+
+        // 2. compare
+        let deleted_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter().filter(|(postid, _)| {
+            // compare existed local_blogs in not existed remote_blogs
+            if local_blogs.contains_key(postid) {
+                return true;
+            }
+            return false;
+        }).map(|(_, blog_info)|->BlogsInfoDO { blog_info }).collect();
+        return deleted_blogs;
     }
 }
 

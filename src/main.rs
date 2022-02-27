@@ -66,7 +66,8 @@ fn _main() {
         download_remote_new_blog(&cfg, &mut weblog, blog_root_path_str);
         //todo!("update remote changed blog");
         update_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
-        todo!("move remote deleted blog;");
+        //todo!("move remote deleted blog;");
+        delete_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         todo!("overwrite local blogs info");
     }
     todo!("update local changed blog and upload");
@@ -99,7 +100,7 @@ fn save_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, weblog: &mut MetaWeblo
 /// need to modify timestamp of new blog
 fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get new blogsinfo by comparing remote and local database
-    let blogs_info = cfg.get_new_blogs_info();
+    let blogs_info = cfg.get_remote_new_blogs_info();
     
     // 2. download blog by postid and save
     println!("Info: find the following new file.");
@@ -109,11 +110,27 @@ fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &s
     save_blogs_by_blogs_info(blogs_info, weblog, root_path);
 }
 
+fn delete_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
+    // 1. get deleted blog by comparing remote and local database
+    let blogs_info = cfg.get_remote_changed_blogs_info();
+
+    // 2. delete(move) blog
+    let deleted_root_path = Path::new("root_path").parent().unwrap().join("cnblog_deleted");
+    println!("Warning: the following file will be moved to {}.", deleted_root_path.to_str().unwrap());
+    for blog_info in blogs_info.iter() {
+        println!("file: {}", blog_info.blog_path);
+    }
+    todo!("move blog");
+    for blog_info in blogs_info.iter() {
+        println!("file: {}", blog_info.blog_path);
+    }
+}
+
 /// update changedblog by remote blog info
 /// Note: it will overwrite older local blog
 fn update_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get changed blogsinfo by comparing remote and local database
-    let blogs_info = cfg.get_changed_blogs_info();
+    let blogs_info = cfg.get_remote_changed_blogs_info();
 
     // 2. save changed blog
     println!("Warning: the following file will be overwritten!");
