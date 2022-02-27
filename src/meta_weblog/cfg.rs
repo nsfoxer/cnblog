@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
 use std::{io::Read, path::Path};
 
 use base64;
@@ -311,6 +310,7 @@ impl Config {
         self.cnblog_conn = Connection::open(self.temp_data_file.path()).unwrap();
     }
 
+    /// get new blogs info by comparing local and remote database
     pub fn get_new_blogs_info(&self) -> Vec<BlogsInfoDO>{
         // 1. query local and remote blogs
         let local_blogs = self.query_blogs_info_do(&self.local_conn);
@@ -351,12 +351,20 @@ impl Config {
         return btmap;
     }
 
-    /// get changed blogs info 
-    pub fn get_changed_blogs_info() {
-        
+    /// get remote changed blogs info by comparing local and remote database
+    /// remote blog is newer than local blog
+    pub fn get_changed_blogs_info(&self) -> Vec<BlogsInfoDO> {
+        // 1. query local and remote blogs
+        let local_blogs = self.query_blogs_info_do(&self.local_conn);
+        let remote_blogs = self.query_blogs_info_do(&self.cnblog_conn);
+
+        // 2. compare
+        let changed_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter().filter(|(postid, remote_blog_info)| {
+            let local_blog_info = local_blogs.get(postid).unwrap();
+            remote_blog_info.timestamp > local_blog_info.timestamp
+        }).map(|(_, blog_info)|->BlogsInfoDO {blog_info}).collect();
+        return changed_blogs;
     }
-
-
 }
 
 pub struct BlogsInfoDO {

@@ -11,7 +11,7 @@ use filetime::FileTime;
 use xmlrpc::{Error, Request};
 
 mod meta_weblog;
-use meta_weblog::cfg::{Config, Utility};
+use meta_weblog::cfg::{Config, Utility, BlogsInfoDO};
 use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
@@ -54,7 +54,7 @@ fn _main() {
         base_path_str,
     );
     cfg.init_conn(); // must call it 
-    let weblog = MetaWeblog::new(
+    let mut weblog = MetaWeblog::new(
         user_info.username.to_string(),
         user_info.password.to_string(),
         user_info.blogid.to_string(),
@@ -63,8 +63,9 @@ fn _main() {
     // check blogs update
     if cfg.check_blogs_info_update() {
         // todo!("download remote new blog;");
-        download_remote_new_blog(&mut cfg, &mut weblog, blog_root_path_str);
-        todo!("update remote changed blog");
+        download_remote_new_blog(&cfg, &mut weblog, blog_root_path_str);
+        //todo!("update remote changed blog");
+        update_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         todo!("move remote deleted blog;");
         todo!("overwrite local blogs info");
     }
@@ -73,35 +74,53 @@ fn _main() {
     todo!("update(save) local blogs info and upload;");
 }
 
-/// compare local and remote info to download new blog
-/// need to modify timestamp of new blog
-fn download_remote_new_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path: &str) {
-    // 1. get new blogsinfo by comparing remote and local database
-    let blogs_info_do = cfg.get_new_blogs_info();
-    
-    // 2. download blog by postid and save
+/// Save the corresponding blog according to the blogs_info
+/// and change the modified timestamp of the blog at the same time
+fn save_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, weblog: &mut MetaWeblog, root_path: &str) {
     let path = Path::new(root_path);
-    for blog_info_do in blogs_info_do {
-        // a. download
-        let blog = weblog.get_post(blog_info_do.postid.to_string().as_str()).unwrap();
+    for blog_info in blogs_info {
+        // 1. download
+        let blog = weblog.get_post(blog_info.postid.to_string().as_str()).unwrap();
 
-        // b. save blog
-        let blog_path = path.join(blog_info_do.blog_path.as_str());
+        // 2. save blog
+        let blog_path = path.join(blog_info.blog_path.as_str());
         let dir_path = blog_path.parent().unwrap();
         if !dir_path.exists() {
             fs::create_dir_all(dir_path).unwrap();
         }
         fs::write(blog_path.as_path(), blog.description).unwrap();
 
-        // c. change file mtime
-        Utility::modify_file_timestamp(blog_path.as_path(), blog_info_do.timestamp);
+        // 3. change file mtime
+        Utility::modify_file_timestamp(blog_path.as_path(), blog_info.timestamp);
     }
 }
 
+/// compare local and remote info to download new blog
+/// need to modify timestamp of new blog
+fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
+    // 1. get new blogsinfo by comparing remote and local database
+    let blogs_info = cfg.get_new_blogs_info();
+    
+    // 2. download blog by postid and save
+    println!("Info: find the following new file.");
+    for blog_info in blogs_info.iter() {
+        println!("file: {}", blog_info.blog_path);
+    }
+    save_blogs_by_blogs_info(blogs_info, weblog, root_path);
+}
+
 /// update changedblog by remote blog info
-fn update_remote_changed_blog(cfg: &mut Config, weblog: &mut MetaWeblog, root_path: &str) {
+/// Note: it will overwrite older local blog
+fn update_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get changed blogsinfo by comparing remote and local database
-    cfg.
+    let blogs_info = cfg.get_changed_blogs_info();
+
+    // 2. save changed blog
+    println!("Warning: the following file will be overwritten!");
+    for blog_info in blogs_info.iter() {
+        println!("file: {}", blog_info.blog_path);
+    }
+    save_blogs_by_blogs_info(blogs_info, weblog, root_path);
 }
 
 /// init user config
