@@ -31,12 +31,17 @@ pub struct UserInfo {
 }
 
 pub struct Config {
+    // postid of database 
     master_postid: i32,
-
-    blogs_info_cfg_path: PathBuf,
+    // rpc
     weblog: MetaWeblog,
+    // local database file
+    blogs_info_cfg_path: PathBuf,
+    // remote database file
     temp_data_file: NamedTempFile,
+    // local database conn
     local_conn: Connection,
+    // remote database conn
     cnblog_conn: Connection,
 }
 
@@ -392,6 +397,38 @@ impl Config {
             return false;
         }).map(|(_, blog_info)|->BlogsInfoDO { blog_info }).collect();
         return deleted_blogs;
+    }
+
+    /// overwrite local database from remote database
+    /// close old conn and open new conn
+    pub fn overwrite_local_database(self) -> Self {
+        // 1. close old conn
+        self.local_conn.close().unwrap();
+        self.cnblog_conn.close().unwrap();
+
+        // 2. mv old to old.bak and mv new to old
+        fs::rename(&self.blogs_info_cfg_path, self.blogs_info_cfg_path.with_extension("bak")).unwrap();
+        fs::rename(&self.temp_data_file, self.blogs_info_cfg_path.as_path()).unwrap();
+
+        // 3. renew datazase conn
+        let local_conn = Connection::open(self.blogs_info_cfg_path.as_path()).unwrap();
+        let cnblog_conn = Connection::open_in_memory().unwrap();
+        Config {
+            local_conn,
+            cnblog_conn,
+            ..self
+        }
+    }
+
+    /// get existing blogs path from local database 
+    pub fn get_local_existed_blogs_path(&self) -> Vec<String> {
+        // 1. get existing blogs info
+        let blogs_info = self.query_blogs_existed_info_do(&self.local_conn);
+
+        // 2. get path
+        blogs_info.into_iter().map(|(_, blog_info)| -> String {
+            blog_info.blog_path
+        }).collect()
     }
 }
 

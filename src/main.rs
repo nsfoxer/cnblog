@@ -1,10 +1,11 @@
 extern crate xmlrpc;
 extern crate filetime;
 
+use std::collections::BTreeMap;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
-use std::fs;
+use std::fs::{self, create_dir};
 use std::io::{stdin, stdout, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 
 use filetime::FileTime;
@@ -37,7 +38,7 @@ fn main() {
 
 fn _main() {
     let base_path_str = "config/";
-    init_user_cfg(base_path_str);
+    init_user_cfg(base_path_str).unwrap();
 
     let blog_root_path_str = "articles/";
 
@@ -68,11 +69,32 @@ fn _main() {
         update_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         //todo!("move remote deleted blog;");
         delete_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
-        todo!("overwrite local blogs info");
+        //todo!("overwrite local blogs database");
+        cfg = overwrite_local_blogs_database(cfg);
     }
+    // update local blog after finishing syncing local and remote database(blogs info)
+    // todo!("upload new blog")
     todo!("update local changed blog and upload");
     todo!("update categories");
     todo!("update(save) local blogs info and upload;");
+}
+
+/// find new blogs and upload them
+fn upload_local_newd_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
+    // 1. get local database blogs path
+    let blogs_path = cfg.get_local_existed_blogs_path();
+    let blogs_path: BTreeMap<String, ()> = blogs_path.into_iter().map(|path|->(String, ()) {
+        (path, ())
+    }).collect();
+
+    // 2. 
+    let root_path = Path::new(root_path);
+    
+}
+
+/// overwrite local blogs database
+fn overwrite_local_blogs_database(cfg: Config) -> Config {
+    cfg.overwrite_local_database()
 }
 
 /// Save the corresponding blog according to the blogs_info
@@ -110,20 +132,43 @@ fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &s
     save_blogs_by_blogs_info(blogs_info, weblog, root_path);
 }
 
+/// delete(move) file from root_path to delete_path
+fn delete_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, root_path: &str, delete_path: &str) {
+    // 1. determine whether the delete path exists
+    let delete_path = Path::new(delete_path);
+    if !delete_path.exists() {
+        create_dir(delete_path).unwrap();
+    }
+    if !delete_path.is_dir() {
+        eprintln!("{:?} already exists but is not a dictory", delete_path.to_str());
+        panic!("{:?} already exists but is not a dictory", delete_path.to_str());
+    }
+
+    // 2. move file to delete path with postid name
+    // the new and old file need to be in same mount point
+    let root_path = Path::new(root_path);
+    for blog_info in blogs_info {
+        let old_path = root_path.join(blog_info.blog_path);
+        let new_path = delete_path.join(blog_info.postid.to_string() + old_path.file_name().unwrap().to_str().unwrap());
+        if let Err(e) = fs::rename(old_path.as_path(), new_path) {
+            eprintln!("Warning: a error occurred while moving {:?} to {:?}. Error: {} ", old_path, delete_path, e);
+        }
+    }
+}
+
+/// compare local and remote info to delete old blog
+/// Note: old blog will be moved to delete dir
 fn delete_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get deleted blog by comparing remote and local database
     let blogs_info = cfg.get_remote_changed_blogs_info();
 
     // 2. delete(move) blog
-    let deleted_root_path = Path::new("root_path").parent().unwrap().join("cnblog_deleted");
+    let deleted_root_path = Path::new(root_path).parent().unwrap().join("cnblog_deleted");
     println!("Warning: the following file will be moved to {}.", deleted_root_path.to_str().unwrap());
     for blog_info in blogs_info.iter() {
         println!("file: {}", blog_info.blog_path);
     }
-    todo!("move blog");
-    for blog_info in blogs_info.iter() {
-        println!("file: {}", blog_info.blog_path);
-    }
+    delete_blogs_by_blogs_info(blogs_info, root_path, deleted_root_path.to_str().unwrap());
 }
 
 /// update changedblog by remote blog info
