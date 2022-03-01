@@ -1,18 +1,19 @@
-extern crate xmlrpc;
 extern crate filetime;
+extern crate xmlrpc;
 
-use std::collections::BTreeMap;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
-use std::fs::{self, create_dir};
+use std::collections::BTreeMap;
+use std::ffi::OsStr;
+use std::fs::{self, create_dir, DirEntry};
 use std::io::{stdin, stdout, Write};
 use std::path::{Path, PathBuf};
 
-
 use filetime::FileTime;
+use walkdir::WalkDir;
 use xmlrpc::{Error, Request};
 
 mod meta_weblog;
-use meta_weblog::cfg::{Config, Utility, BlogsInfoDO};
+use meta_weblog::cfg::{BlogsInfoDO, Config, Utility};
 use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
@@ -54,7 +55,7 @@ fn _main() {
         &user_info.blogid,
         base_path_str,
     );
-    cfg.init_conn(); // must call it 
+    cfg.init_conn(); // must call it
     let mut weblog = MetaWeblog::new(
         user_info.username.to_string(),
         user_info.password.to_string(),
@@ -73,23 +74,57 @@ fn _main() {
         cfg = overwrite_local_blogs_database(cfg);
     }
     // update local blog after finishing syncing local and remote database(blogs info)
+    sync_local_blogs_and_info(&cfg, &mut weblog, root_path);
     // todo!("upload new blog")
     todo!("update local changed blog and upload");
     todo!("update categories");
     todo!("update(save) local blogs info and upload;");
+    todo!("sync local database and local blogs");
 }
 
-/// find new blogs and upload them
-fn upload_local_newd_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
+/// sync local blogs and local blogs info(database)
+fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get local database blogs path
     let blogs_path = cfg.get_local_existed_blogs_path();
-    let blogs_path: BTreeMap<String, ()> = blogs_path.into_iter().map(|path|->(String, ()) {
-        (path, ())
-    }).collect();
+    let blogs_path: BTreeMap<String, ()> = blogs_path
+        .into_iter()
+        .map(|path| -> (String, ()) { (path, ()) })
+        .collect();
 
-    // 2. 
-    let root_path = Path::new(root_path);
-    
+    // 2. walk through a directory
+    for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)) {
+        let local_path = entry.unwrap().path().strip_prefix(root_path).unwrap();
+        
+        // 2.1 upload new blog
+        if !blogs_path.contains_key(local_path) {
+
+        }
+    }
+}
+
+fn upload_new_blog(blogs_path:)
+
+/// if entry is not hidden and extension is markdown, return true, otherwise false;
+fn is_not_hidden_and_is_markdown(entry: &DirEntry) -> bool {
+    // 1. entry is not hidden
+    match entry.file_name().to_str() {
+        Some(e) => {
+            if e.starts_with(".") {
+                return false;
+            }
+        },
+        None => return false,
+    }
+    // 2. get entry suffix
+    let path = entry.path();
+    let suffix = match path.extension() {
+        Some(ext) =>  ext.to_str().unwrap_or(""),
+        None => "",
+    };
+    if suffix != "md" && suffix != "markdown" {
+        return false;
+    }
+    return true;
 }
 
 /// overwrite local blogs database
@@ -99,11 +134,17 @@ fn overwrite_local_blogs_database(cfg: Config) -> Config {
 
 /// Save the corresponding blog according to the blogs_info
 /// and change the modified timestamp of the blog at the same time
-fn save_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, weblog: &mut MetaWeblog, root_path: &str) {
+fn save_blogs_by_blogs_info(
+    blogs_info: Vec<BlogsInfoDO>,
+    weblog: &mut MetaWeblog,
+    root_path: &str,
+) {
     let path = Path::new(root_path);
     for blog_info in blogs_info {
         // 1. download
-        let blog = weblog.get_post(blog_info.postid.to_string().as_str()).unwrap();
+        let blog = weblog
+            .get_post(blog_info.postid.to_string().as_str())
+            .unwrap();
 
         // 2. save blog
         let blog_path = path.join(blog_info.blog_path.as_str());
@@ -123,7 +164,7 @@ fn save_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, weblog: &mut MetaWeblo
 fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get new blogsinfo by comparing remote and local database
     let blogs_info = cfg.get_remote_new_blogs_info();
-    
+
     // 2. download blog by postid and save
     println!("Info: find the following new file.");
     for blog_info in blogs_info.iter() {
@@ -140,8 +181,14 @@ fn delete_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, root_path: &str, del
         create_dir(delete_path).unwrap();
     }
     if !delete_path.is_dir() {
-        eprintln!("{:?} already exists but is not a dictory", delete_path.to_str());
-        panic!("{:?} already exists but is not a dictory", delete_path.to_str());
+        eprintln!(
+            "{:?} already exists but is not a dictory",
+            delete_path.to_str()
+        );
+        panic!(
+            "{:?} already exists but is not a dictory",
+            delete_path.to_str()
+        );
     }
 
     // 2. move file to delete path with postid name
@@ -149,9 +196,13 @@ fn delete_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, root_path: &str, del
     let root_path = Path::new(root_path);
     for blog_info in blogs_info {
         let old_path = root_path.join(blog_info.blog_path);
-        let new_path = delete_path.join(blog_info.postid.to_string() + old_path.file_name().unwrap().to_str().unwrap());
+        let new_path = delete_path
+            .join(blog_info.postid.to_string() + old_path.file_name().unwrap().to_str().unwrap());
         if let Err(e) = fs::rename(old_path.as_path(), new_path) {
-            eprintln!("Warning: a error occurred while moving {:?} to {:?}. Error: {} ", old_path, delete_path, e);
+            eprintln!(
+                "Warning: a error occurred while moving {:?} to {:?}. Error: {} ",
+                old_path, delete_path, e
+            );
         }
     }
 }
@@ -163,8 +214,14 @@ fn delete_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: 
     let blogs_info = cfg.get_remote_changed_blogs_info();
 
     // 2. delete(move) blog
-    let deleted_root_path = Path::new(root_path).parent().unwrap().join("cnblog_deleted");
-    println!("Warning: the following file will be moved to {}.", deleted_root_path.to_str().unwrap());
+    let deleted_root_path = Path::new(root_path)
+        .parent()
+        .unwrap()
+        .join("cnblog_deleted");
+    println!(
+        "Warning: the following file will be moved to {}.",
+        deleted_root_path.to_str().unwrap()
+    );
     for blog_info in blogs_info.iter() {
         println!("file: {}", blog_info.blog_path);
     }
