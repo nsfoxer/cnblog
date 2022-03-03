@@ -1,15 +1,15 @@
 extern crate filetime;
 extern crate xmlrpc;
 
+use crate::meta_weblog::weblog::WpCategory;
+use std::collections::HashSet;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::collections::BTreeMap;
-use std::ffi::OsStr;
-use std::fs::{self, create_dir, DirEntry};
+use std::fs::{self, create_dir};
 use std::io::{stdin, stdout, Write};
 use std::path::{Path, PathBuf};
 
-use filetime::FileTime;
-use walkdir::WalkDir;
+use walkdir::{WalkDir, DirEntry};
 use xmlrpc::{Error, Request};
 
 mod meta_weblog;
@@ -74,7 +74,7 @@ fn _main() {
         cfg = overwrite_local_blogs_database(cfg);
     }
     // update local blog after finishing syncing local and remote database(blogs info)
-    sync_local_blogs_and_info(&cfg, &mut weblog, root_path);
+    sync_local_blogs_and_info(&cfg, &mut weblog, blog_root_path_str);
     // todo!("upload new blog")
     todo!("update local changed blog and upload");
     todo!("update categories");
@@ -90,19 +90,43 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
         .into_iter()
         .map(|path| -> (String, ()) { (path, ()) })
         .collect();
-
+    
+    let mut categories = cfg.get_local_categories();
     // 2. walk through a directory
     for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)) {
-        let local_path = entry.unwrap().path().strip_prefix(root_path).unwrap();
+        let local_path = entry.unwrap().path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
         
         // 2.1 upload new blog
         if !blogs_path.contains_key(local_path) {
-
+            upload_new_blog(&entry.unwrap(), &mut categories, &cfg, &mut weblog, local_path);
         }
     }
 }
 
-fn upload_new_blog(blogs_path:)
+fn upload_new_blog(entry: &DirEntry, categories:&mut HashSet<String>, cfg: &Config, weblog: &mut MetaWeblog, local_path: &str) {
+    // 1. generate basic post
+    let file_content = fs::read_to_string(entry.path()).unwrap();
+    let timestamp = Utility::get_file_timestamp(entry.path());
+    let category = entry.path().parent().unwrap().file_name().unwrap().to_str().unwrap().to_string();
+
+    let mut post = Post::default();
+    post.description = file_content;
+    post.categories.push(category.clone());
+    post.title = entry.path().file_name().unwrap().to_str().unwrap().to_string();
+
+    // 2. check category else upload new category
+    if !categories.contains(&category) {
+        // insert new category and upload category
+        cfg.new_category(&category);
+        let mut cate = WpCategory::default();
+        cate.name = category.clone();
+        weblog.new_category(cate);
+        categories.insert(category);
+    }
+
+    let postid = weblog.new_post(post, true).unwrap();
+    cfg.new_blogs()
+}
 
 /// if entry is not hidden and extension is markdown, return true, otherwise false;
 fn is_not_hidden_and_is_markdown(entry: &DirEntry) -> bool {
