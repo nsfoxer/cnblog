@@ -429,7 +429,7 @@ impl Config {
 
     /// get all categories in local database
     pub fn get_local_categories(&self) -> HashSet<String> {
-        let stmt = self.local_conn.prepare("select category from Category").unwrap();
+        let mut stmt = self.local_conn.prepare("select category from Category").unwrap();
         let categories = stmt.query_map([], |row| {
             row.get(0)
         }).unwrap();
@@ -446,8 +446,8 @@ impl Config {
     }
 
     /// insert new blog
-    pub fn new_post(&self, blog_path: &str, postid: i32, timestamp: i64, deleted: u8) {
-        self.local_conn.execute("insert into BlogInfo (blog_path, postid, timestamp, deleted) (?, ?, ?, ?)", [blog_path, postid, timestamp, deleted]);
+    pub fn new_post(&self, blog_path: &str, postid: i32, timestamp: i64) {
+        self.local_conn.execute("insert into BlogInfo (blog_path, postid, timestamp, deleted) (?, ?, ?, ?)", params![blog_path, postid, timestamp, 0]);
     }
 }
 

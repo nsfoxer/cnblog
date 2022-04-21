@@ -74,8 +74,8 @@ fn _main() {
         cfg = overwrite_local_blogs_database(cfg);
     }
     // update local blog after finishing syncing local and remote database(blogs info)
-    sync_local_blogs_and_info(&cfg, &mut weblog, blog_root_path_str);
     // todo!("upload new blog")
+    sync_local_blogs_and_info(&cfg, &mut weblog, blog_root_path_str);
     todo!("update local changed blog and upload");
     todo!("update categories");
     todo!("update(save) local blogs info and upload;");
@@ -91,19 +91,19 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
         .map(|path| -> (String, ()) { (path, ()) })
         .collect();
     
-    let mut categories = cfg.get_local_categories();
     // 2. walk through a directory
     for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)) {
-        let local_path = entry.unwrap().path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
+        let entry = entry.unwrap();
+        let local_path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
         
         // 2.1 upload new blog
         if !blogs_path.contains_key(local_path) {
-            upload_new_blog(&entry.unwrap(), &mut categories, &cfg, &mut weblog, local_path);
+            upload_new_blog(&entry, &cfg, weblog, local_path);
         }
     }
 }
 
-fn upload_new_blog(entry: &DirEntry, categories:&mut HashSet<String>, cfg: &Config, weblog: &mut MetaWeblog, local_path: &str) {
+fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, local_path: &str) {
     // 1. generate basic post
     let file_content = fs::read_to_string(entry.path()).unwrap();
     let timestamp = Utility::get_file_timestamp(entry.path());
@@ -115,6 +115,7 @@ fn upload_new_blog(entry: &DirEntry, categories:&mut HashSet<String>, cfg: &Conf
     post.title = entry.path().file_name().unwrap().to_str().unwrap().to_string();
 
     // 2. check category else upload new category
+    let mut categories = cfg.get_local_categories();
     if !categories.contains(&category) {
         // insert new category and upload category
         cfg.new_category(&category);
@@ -125,7 +126,7 @@ fn upload_new_blog(entry: &DirEntry, categories:&mut HashSet<String>, cfg: &Conf
     }
 
     let postid = weblog.new_post(post, true).unwrap();
-    cfg.new_blogs()
+    cfg.new_post(local_path, postid.parse().unwrap(), timestamp);
 }
 
 /// if entry is not hidden and extension is markdown, return true, otherwise false;
