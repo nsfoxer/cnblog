@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, HashMap};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
@@ -74,7 +74,7 @@ impl Config {
     /// check username and password valid!
     /// Return Error while user info is wrong, else return
     pub fn check_account(username: &str, password: &str) -> Result<(), Error> {
-        let mut weblog = MetaWeblog::new(
+        let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
             "123".to_string(),
@@ -130,8 +130,7 @@ impl Config {
                 blog_path nvarchar,  -- local blog path
                 postid integer,      -- postid of remote corresponding blog
                 timestamp integer,    -- last upload timestamp
-                deleted BOOLEAN not null check (deleted in (0, 1)), -- whether is deleted        
-
+                deleted BOOLEAN not null check (deleted in (0, 1)), -- whether is deleted
             );
             create table Category (
                 id integer primary key, -- primary key (be meaningless)
@@ -172,10 +171,10 @@ impl Config {
             Connection::open_with_flags(blogs_path, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
         conn.execute(
             "\
-            insert into BlogsInfo (blog_path, postid, datetime)\
+            insert into BlogsInfo (blog_path, postid, timestamp, deleted)\
             values (?, ?, ?, ?)",
             params![MASTER_BLOGS_CFG, postid, now, 1],
-        );
+        ).unwrap();
         drop(conn); // Saved database to upload file
 
         // 4. upload database
@@ -416,6 +415,24 @@ impl Config {
         }
     }
 
+    /// close all database and upload local database
+    pub fn update_remote_database(self) {
+        // 1. update local database timestamp
+        let now = Local::now().timestamp();
+        self.local_conn.execute("update Bloginfo set timestamp = ? where postid=?", params![now, self.master_postid]).unwrap();
+            
+        // 2. close local database
+        self.local_conn.close().unwrap();
+        self.cnblog_conn.close().unwrap();
+
+        // 2. upload(update) local database
+        let mut post = Post::default();
+        post.description = Config::file2base64(self.blogs_info_cfg_path.as_path());
+        post.title = "[CNBLOG]BLOGS_INFO_CFG".to_string();
+        post.categories.push(format!("{}[CNBLOG]", self.master_postid));
+        self.weblog.edit_post(self.master_postid.to_string().as_str(), post, false).unwrap();
+    }
+
     /// get existing blogs path from local database 
     pub fn get_local_existed_blogs_path(&self) -> Vec<String> {
         // 1. get existing blogs info
@@ -424,6 +441,18 @@ impl Config {
         // 2. get path
         blogs_info.into_iter().map(|(_, blog_info)| -> String {
             blog_info.blog_path
+        }).collect()
+    }
+
+    /// get local existing blogs info
+    /// return map that key is local path and value is blog's timestamp 
+    pub fn get_local_existed_blogs_info(&self) -> HashMap<String, (i64,i32)> {
+        // 1. get existing blogs info
+        let blogs_info = self.query_blogs_existed_info_do(&self.local_conn);
+
+        // 2. convert blog info to hashmap
+        blogs_info.into_iter().map(|(_, blog_info)| {
+            (blog_info.blog_path, (blog_info.timestamp, blog_info.postid))
         }).collect()
     }
 
@@ -447,7 +476,12 @@ impl Config {
 
     /// insert new blog
     pub fn new_post(&self, blog_path: &str, postid: i32, timestamp: i64) {
-        self.local_conn.execute("insert into BlogInfo (blog_path, postid, timestamp, deleted) (?, ?, ?, ?)", params![blog_path, postid, timestamp, 0]);
+        self.local_conn.execute("insert into BlogInfo (blog_path, postid, timestamp, deleted) (?, ?, ?, ?)", params![blog_path, postid, timestamp, 0]).unwrap();
+    }
+
+    /// update changed blogs' timestamp
+    pub fn edit_post(&self, postid: i32, timestamp: i64) {
+        self.local_conn.execute("update BlogInfo set timestamp = ? where postid = ?", params![timestamp, postid]).unwrap();
     }
 }
 

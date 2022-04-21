@@ -2,15 +2,14 @@ extern crate filetime;
 extern crate xmlrpc;
 
 use crate::meta_weblog::weblog::WpCategory;
-use std::collections::HashSet;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::collections::BTreeMap;
 use std::fs::{self, create_dir};
 use std::io::{stdin, stdout, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use walkdir::{WalkDir, DirEntry};
-use xmlrpc::{Error, Request};
+use xmlrpc::Error;
 
 mod meta_weblog;
 use meta_weblog::cfg::{BlogsInfoDO, Config, Utility};
@@ -18,26 +17,6 @@ use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
 fn main() {
-    let metaweblog = MetaWeblog::new(
-        "username".to_string(),
-        "password".to_string(),
-        "123".to_string(),
-    );
-    dbg!(metaweblog.get_categories().unwrap());
-
-    // let p = metaweblog.get_post("15209798").unwrap();
-
-    // //let postid = metaweblog.new_post(p, true).unwrap();
-    // let mut category = WpCategory::default();
-    // category.parent_id = -1;
-    // category.name = "Test!!!".to_string();
-    // let id = metaweblog.new_category(category).unwrap();
-    // println!("{:#?}", id);
-
-    //init_user_cfg("~/.cnblog/");
-}
-
-fn _main() {
     let base_path_str = "config/";
     init_user_cfg(base_path_str).unwrap();
 
@@ -75,11 +54,13 @@ fn _main() {
     }
     // update local blog after finishing syncing local and remote database(blogs info)
     // todo!("upload new blog")
+    //todo!("update local changed blog and upload");
+    //todo!("update categories");
+    //todo!("update(save) local blogs info and upload;");
     sync_local_blogs_and_info(&cfg, &mut weblog, blog_root_path_str);
-    todo!("update local changed blog and upload");
-    todo!("update categories");
-    todo!("update(save) local blogs info and upload;");
-    todo!("sync local database and local blogs");
+    //todo!("sync local database and local blogs"); ??????
+    //todo!("upload local database");
+    cfg.update_remote_database();
 }
 
 /// sync local blogs and local blogs info(database)
@@ -92,6 +73,7 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
         .collect();
     
     // 2. walk through a directory
+    let blogs_info = cfg.get_local_existed_blogs_info();
     for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)) {
         let entry = entry.unwrap();
         let local_path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
@@ -99,10 +81,37 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
         // 2.1 upload new blog
         if !blogs_path.contains_key(local_path) {
             upload_new_blog(&entry, &cfg, weblog, local_path);
+            continue;
+        }
+
+        // 2.2 get changed blog
+        if let Some((old_timestamp, postid)) = blogs_info.get(local_path) {
+            // local timestamp is greater than the remote timestamp
+            let new_timestamp = Utility::get_file_timestamp(entry.path());
+            if new_timestamp > *old_timestamp{
+                update_local_blog(&entry, cfg, weblog, new_timestamp, *postid);
+            }
         }
     }
 }
 
+/// update changed local blog
+fn update_local_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, timestamp:i64, postid: i32) {
+    // 1. generate basic post
+    let content = fs::read_to_string(entry.path()).unwrap();
+    let category = entry.path().parent().unwrap().file_name().unwrap().to_str().unwrap().to_string();
+    let mut post = Post::default();
+    post.description = content;
+    post.categories.push(category);
+    post.title = entry.path().file_name().unwrap().to_str().unwrap().to_string();
+
+    // 2. upload changed category
+    weblog.edit_post(postid.to_string().as_str(), post, true).unwrap();
+    // 3. update database
+    cfg.edit_post(postid, timestamp);
+}
+
+/// upload local new blog and save info to local database
 fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, local_path: &str) {
     // 1. generate basic post
     let file_content = fs::read_to_string(entry.path()).unwrap();
@@ -115,16 +124,17 @@ fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, loca
     post.title = entry.path().file_name().unwrap().to_str().unwrap().to_string();
 
     // 2. check category else upload new category
-    let mut categories = cfg.get_local_categories();
+    let categories = cfg.get_local_categories();
     if !categories.contains(&category) {
         // insert new category and upload category
         cfg.new_category(&category);
         let mut cate = WpCategory::default();
         cate.name = category.clone();
-        weblog.new_category(cate);
-        categories.insert(category);
+        weblog.new_category(cate).unwrap();
+        //categories.insert(category);
     }
 
+    // 3. update database
     let postid = weblog.new_post(post, true).unwrap();
     cfg.new_post(local_path, postid.parse().unwrap(), timestamp);
 }
