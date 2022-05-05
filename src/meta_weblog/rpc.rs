@@ -13,7 +13,7 @@ const GET_RECENT_POSTS: &str = "metaWeblog.getRecentPosts";
 const GET_USERS_BLOGS: &str = "blogger.getUsersBlogs";
 const NEW_POST: &str = "metaWeblog.newPost";
 const NEW_CATEGORY: &str = "wp.newCategory";
-const SERVER_URL: &str = "https://rpc.cnblogs.com/metaweblog/";
+const SERVER_URL: &str = "https://rpc.cnblogs.com/metaweblog";
 
 pub struct MetaWeblog {
     app_key: String,
@@ -31,7 +31,7 @@ impl MetaWeblog {
             blogid,
             username: username.clone().to_string(),
             app_key: username.clone().to_string(),
-            url: format!("{}{}", SERVER_URL, username.clone()),
+            url: format!("{}/{}", SERVER_URL, username),
         }
     }
 
@@ -196,7 +196,8 @@ impl MetaWeblog {
         for arg in args.into_iter() {
             request = request.arg(arg);
         }
-
-        request.call_url(self.url.clone())
+        let mut f = std::fs::File::create("2.xml").unwrap();
+        request.write_as_xml(&mut f).unwrap();
+        request.call_url(self.url.as_str())
     }
 }
