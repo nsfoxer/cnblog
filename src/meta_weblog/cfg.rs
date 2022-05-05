@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
@@ -8,9 +8,9 @@ use base64;
 use chrono::prelude::*;
 use filetime::FileTime;
 use regex::Regex;
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, Result};
 use serde::{Deserialize, Serialize};
-use tempfile::{tempfile, NamedTempFile};
+use tempfile::NamedTempFile;
 use xmlrpc::Error;
 
 use super::rpc::MetaWeblog;
@@ -31,7 +31,7 @@ pub struct UserInfo {
 }
 
 pub struct Config {
-    // postid of database 
+    // postid of database
     master_postid: i32,
     // rpc
     weblog: MetaWeblog,
@@ -54,7 +54,7 @@ impl Config {
         blogid: &str,
         base_path: &str,
     ) -> Self {
-        let blogs_path = PathBuf::from(base_path).join(MASTER_BLOGS_CFG);
+        let blogs_path = PathBuf::from(base_path).join(BLOGS_INFO_CFG);
         let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
@@ -77,7 +77,7 @@ impl Config {
         let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
-            "123".to_string(),
+            username.to_string(),
         );
         weblog.get_users_blogs()?;
         Ok(())
@@ -109,19 +109,20 @@ impl Config {
     }
 
     /// init blogs cfg
-    pub fn init_blogs_cfg(blogs_path: &Path) {
+    pub fn init_blogs_cfg(blogs_path: &Path) -> Result<()> {
         if blogs_path.exists() {
             eprintln!("blogs_path should be not exists! But it's existed!");
-            return;
+            return Ok(());
         }
-        Config::create_database(blogs_path);
+        Config::create_database(blogs_path)?;
+        Ok(())
     }
 
     /// create database about blogs info in database_path
     /// Any error will panic (unwrap)
-    fn create_database(database_path: &Path) {
+    fn create_database(database_path: &Path) -> Result<()> {
         // create database
-        let conn = Connection::open(database_path).unwrap();
+        let conn = Connection::open(database_path)?;
 
         // create table
         conn.execute(
@@ -130,15 +131,18 @@ impl Config {
                 blog_path nvarchar,  -- local blog path
                 postid integer,      -- postid of remote corresponding blog
                 timestamp integer,    -- last upload timestamp
-                deleted BOOLEAN not null check (deleted in (0, 1)), -- whether is deleted
-            );
-            create table Category (
-                id integer primary key, -- primary key (be meaningless)
-                category nvarchar,      -- category name
+                deleted BOOLEAN not null check (deleted in (0, 1)) -- whether is deleted
             );",
             [],
-        )
-        .unwrap();
+        )?;
+        conn.execute(
+            "create table Category (
+                id integer primary key, -- primary key (be meaningless)
+                category nvarchar      -- category name
+            );",
+            [],
+        )?;
+        Ok(())
     }
 
     /// Upload a new blogs config file
@@ -152,6 +156,7 @@ impl Config {
         );
         let mut post = Post::default();
         post.title = "[CNBLOG]BLOGS_INFO_CFG".to_string();
+        post.description = "None".to_string();
         let postid: i32 = weblog
             .new_post(post.clone(), false)
             .unwrap()
@@ -174,7 +179,8 @@ impl Config {
             insert into BlogsInfo (blog_path, postid, timestamp, deleted)\
             values (?, ?, ?, ?)",
             params![MASTER_BLOGS_CFG, postid, now, 1],
-        ).unwrap();
+        )
+        .unwrap();
         drop(conn); // Saved database to upload file
 
         // 4. upload database
@@ -314,15 +320,16 @@ impl Config {
     }
 
     /// get new blogs info by comparing local and remote database
-    pub fn get_remote_new_blogs_info(&self) -> Vec<BlogsInfoDO>{
+    pub fn get_remote_new_blogs_info(&self) -> Vec<BlogsInfoDO> {
         // 1. query local and remote blogs
         let local_blogs = self.query_blogs_existed_info_do(&self.local_conn);
         let remote_blogs = self.query_blogs_existed_info_do(&self.cnblog_conn);
-        
+
         // 2. compare
-        let new_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter()
+        let new_blogs: Vec<BlogsInfoDO> = remote_blogs
+            .into_iter()
             .filter(|(postid, _)| !local_blogs.contains_key(postid))
-            .map(|(_, blog)|->BlogsInfoDO {blog})
+            .map(|(_, blog)| -> BlogsInfoDO { blog })
             .collect();
         return new_blogs;
     }
@@ -334,14 +341,20 @@ impl Config {
         self.query_blogs_info_do("where deleted = 1", conn)
     }
 
-    fn query_blogs_info_do(&self, sql_suffix: &str, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
+    fn query_blogs_info_do(
+        &self,
+        sql_suffix: &str,
+        conn: &Connection,
+    ) -> BTreeMap<i32, BlogsInfoDO> {
         // 1. prepare sql
         let sql = "\
             select blog_path, postid, timestamp \
-            from BlogsInfo ".to_string() + sql_suffix;
+            from BlogsInfo "
+            .to_string()
+            + sql_suffix;
 
         let mut stmt = self.local_conn.prepare(&sql).unwrap();
-        
+
         // 2. get info
         let blogs = stmt
             .query_map([], |row| {
@@ -351,8 +364,9 @@ impl Config {
                     timestamp: row.get(2).unwrap(),
                     deleted: false,
                 })
-            }).unwrap();
-        
+            })
+            .unwrap();
+
         // 3. construct BTreeMap
         let mut btmap = BTreeMap::new();
         blogs.for_each(|blog| {
@@ -370,10 +384,14 @@ impl Config {
         let remote_blogs = self.query_blogs_existed_info_do(&self.cnblog_conn);
 
         // 2. compare
-        let changed_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter().filter(|(postid, remote_blog_info)| {
-            let local_blog_info = local_blogs.get(postid).unwrap();
-            remote_blog_info.timestamp > local_blog_info.timestamp
-        }).map(|(_, blog_info)|->BlogsInfoDO {blog_info}).collect();
+        let changed_blogs: Vec<BlogsInfoDO> = remote_blogs
+            .into_iter()
+            .filter(|(postid, remote_blog_info)| {
+                let local_blog_info = local_blogs.get(postid).unwrap();
+                remote_blog_info.timestamp > local_blog_info.timestamp
+            })
+            .map(|(_, blog_info)| -> BlogsInfoDO { blog_info })
+            .collect();
         return changed_blogs;
     }
 
@@ -384,13 +402,17 @@ impl Config {
         let remote_blogs = self.query_blogs_not_existed_info_do(&self.cnblog_conn);
 
         // 2. compare
-        let deleted_blogs: Vec<BlogsInfoDO> = remote_blogs.into_iter().filter(|(postid, _)| {
-            // compare existed local_blogs in not existed remote_blogs
-            if local_blogs.contains_key(postid) {
-                return true;
-            }
-            return false;
-        }).map(|(_, blog_info)|->BlogsInfoDO { blog_info }).collect();
+        let deleted_blogs: Vec<BlogsInfoDO> = remote_blogs
+            .into_iter()
+            .filter(|(postid, _)| {
+                // compare existed local_blogs in not existed remote_blogs
+                if local_blogs.contains_key(postid) {
+                    return true;
+                }
+                return false;
+            })
+            .map(|(_, blog_info)| -> BlogsInfoDO { blog_info })
+            .collect();
         return deleted_blogs;
     }
 
@@ -402,7 +424,11 @@ impl Config {
         self.cnblog_conn.close().unwrap();
 
         // 2. mv old to old.bak and mv new to old
-        fs::rename(&self.blogs_info_cfg_path, self.blogs_info_cfg_path.with_extension("bak")).unwrap();
+        fs::rename(
+            &self.blogs_info_cfg_path,
+            self.blogs_info_cfg_path.with_extension("bak"),
+        )
+        .unwrap();
         fs::rename(&self.temp_data_file, self.blogs_info_cfg_path.as_path()).unwrap();
 
         // 3. renew datazase conn
@@ -419,8 +445,13 @@ impl Config {
     pub fn update_remote_database(self) {
         // 1. update local database timestamp
         let now = Local::now().timestamp();
-        self.local_conn.execute("update Bloginfo set timestamp = ? where postid=?", params![now, self.master_postid]).unwrap();
-            
+        self.local_conn
+            .execute(
+                "update BlogsInfo set timestamp = ? where postid=?",
+                params![now, self.master_postid],
+            )
+            .unwrap();
+
         // 2. close local database
         self.local_conn.close().unwrap();
         self.cnblog_conn.close().unwrap();
@@ -429,39 +460,45 @@ impl Config {
         let mut post = Post::default();
         post.description = Config::file2base64(self.blogs_info_cfg_path.as_path());
         post.title = "[CNBLOG]BLOGS_INFO_CFG".to_string();
-        post.categories.push(format!("{}[CNBLOG]", self.master_postid));
-        self.weblog.edit_post(self.master_postid.to_string().as_str(), post, false).unwrap();
+        post.categories
+            .push(format!("{}[CNBLOG]", self.master_postid));
+        self.weblog
+            .edit_post(self.master_postid.to_string().as_str(), post, false)
+            .unwrap();
     }
 
-    /// get existing blogs path from local database 
+    /// get existing blogs path from local database
     pub fn get_local_existed_blogs_path(&self) -> Vec<String> {
         // 1. get existing blogs info
         let blogs_info = self.query_blogs_existed_info_do(&self.local_conn);
 
         // 2. get path
-        blogs_info.into_iter().map(|(_, blog_info)| -> String {
-            blog_info.blog_path
-        }).collect()
+        blogs_info
+            .into_iter()
+            .map(|(_, blog_info)| -> String { blog_info.blog_path })
+            .collect()
     }
 
     /// get local existing blogs info
-    /// return map that key is local path and value is blog's timestamp 
-    pub fn get_local_existed_blogs_info(&self) -> HashMap<String, (i64,i32)> {
+    /// return map that key is local path and value is blog's timestamp
+    pub fn get_local_existed_blogs_info(&self) -> HashMap<String, (i64, i32)> {
         // 1. get existing blogs info
         let blogs_info = self.query_blogs_existed_info_do(&self.local_conn);
 
         // 2. convert blog info to hashmap
-        blogs_info.into_iter().map(|(_, blog_info)| {
-            (blog_info.blog_path, (blog_info.timestamp, blog_info.postid))
-        }).collect()
+        blogs_info
+            .into_iter()
+            .map(|(_, blog_info)| (blog_info.blog_path, (blog_info.timestamp, blog_info.postid)))
+            .collect()
     }
 
     /// get all categories in local database
     pub fn get_local_categories(&self) -> HashSet<String> {
-        let mut stmt = self.local_conn.prepare("select category from Category").unwrap();
-        let categories = stmt.query_map([], |row| {
-            row.get(0)
-        }).unwrap();
+        let mut stmt = self
+            .local_conn
+            .prepare("select category from Category")
+            .unwrap();
+        let categories = stmt.query_map([], |row| row.get(0)).unwrap();
         let mut hashset = HashSet::<String>::new();
         for category in categories {
             hashset.insert(category.unwrap());
@@ -471,17 +508,29 @@ impl Config {
 
     /// insert new category
     pub fn new_category(&self, category: &str) {
-        self.local_conn.execute("insert into Category (category) values (?)", [category]).unwrap();
+        self.local_conn
+            .execute("insert into Category (category) values (?)", [category])
+            .unwrap();
     }
 
     /// insert new blog
     pub fn new_post(&self, blog_path: &str, postid: i32, timestamp: i64) {
-        self.local_conn.execute("insert into BlogInfo (blog_path, postid, timestamp, deleted) (?, ?, ?, ?)", params![blog_path, postid, timestamp, 0]).unwrap();
+        self.local_conn
+            .execute(
+                "insert into BlogsInfo (blog_path, postid, timestamp, deleted) values (?, ?, ?, ?)",
+                params![blog_path, postid, timestamp, 0],
+            )
+            .unwrap();
     }
 
     /// update changed blogs' timestamp
     pub fn edit_post(&self, postid: i32, timestamp: i64) {
-        self.local_conn.execute("update BlogInfo set timestamp = ? where postid = ?", params![timestamp, postid]).unwrap();
+        self.local_conn
+            .execute(
+                "update BlogsInfo set timestamp = ? where postid = ?",
+                params![timestamp, postid],
+            )
+            .unwrap();
     }
 }
 
@@ -493,13 +542,11 @@ pub struct BlogsInfoDO {
 }
 
 /// function for utility
-pub struct Utility {
-
-}
+pub struct Utility {}
 
 impl Utility {
     /// get file mtime
-    pub fn get_file_timestamp(file_path: &Path) -> i64{
+    pub fn get_file_timestamp(file_path: &Path) -> i64 {
         let metadata = fs::metadata(file_path).unwrap();
         let mtime = FileTime::from_last_modification_time(&metadata);
         mtime.unix_seconds()
@@ -509,5 +556,15 @@ impl Utility {
     pub fn modify_file_timestamp(file_path: &Path, timestamp: i64) {
         let mtime = FileTime::from_unix_time(timestamp, 0);
         filetime::set_file_mtime(file_path, mtime).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod config_test {
+
+    #[test]
+    fn test_check_account() {
+        let r = super::Config::check_account("cnblog_test", "kh8ZunWgqDbXTFc");
+        println!("{:?}", r);
     }
 }

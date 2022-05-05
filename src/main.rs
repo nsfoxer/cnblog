@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, create_dir};
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
+use std::process::exit;
 
 use walkdir::{WalkDir, DirEntry};
 use xmlrpc::Error;
@@ -18,7 +19,10 @@ use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
 fn main() {
     let base_path_str = "config/";
-    init_user_cfg(base_path_str).unwrap();
+    if let Err(e) = init_user_cfg(base_path_str) {
+        eprintln!("{e}");
+        exit(1);
+    }
 
     let blog_root_path_str = "articles/";
 
@@ -74,8 +78,12 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
     
     // 2. walk through a directory
     let blogs_info = cfg.get_local_existed_blogs_info();
-    for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)) {
+    for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)){
         let entry = entry.unwrap();
+        if entry.path().is_dir() {
+            continue;
+        }
+
         let local_path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
         
         // 2.1 upload new blog
@@ -152,6 +160,9 @@ fn is_not_hidden_and_is_markdown(entry: &DirEntry) -> bool {
     }
     // 2. get entry suffix
     let path = entry.path();
+    if path.is_dir() {
+        return true;
+    }
     let suffix = match path.extension() {
         Some(ext) =>  ext.to_str().unwrap_or(""),
         None => "",
@@ -307,11 +318,11 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
     let num = Config::try_get_master_postid(&username, &password)?;
     let blogs_path = base_path.join(BLOGS_INFO_CFG);
     let blogs_path = blogs_path.as_path();
-    let mut postid = -1;
+    let postid;
     if num == 0 {
         // Not exists
         // Now we need to create a new blog info
-        Config::init_blogs_cfg(blogs_path);
+        Config::init_blogs_cfg(blogs_path).unwrap();
         postid = Config::upload_new_blogs_cfg(&username, &password, blogs_path);
     } else {
         // Exists
@@ -328,7 +339,7 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
     }
 
     // Save user info
-    Config::write_user_info_cfg(&username, &password, postid, base_path);
+    Config::write_user_info_cfg(&username, &password, postid, &user_path);
     Ok(())
 }
 
@@ -352,6 +363,7 @@ fn ask_question() -> (String, String) {
     // 3. get password
     print!("Please input your password: ");
     stdout().flush().unwrap();
+    buf.clear();
     stdin().read_line(&mut buf).unwrap();
     let password = buf.trim().to_string();
 
