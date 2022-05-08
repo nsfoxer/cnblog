@@ -434,8 +434,11 @@ impl Config {
         let changed_blogs: Vec<BlogsInfoDO> = remote_blogs
             .into_iter()
             .filter(|(postid, remote_blog_info)| {
-                let local_blog_info = local_blogs.get(postid).unwrap();
-                remote_blog_info.timestamp > local_blog_info.timestamp
+                // if local blog not existed, it means it's a new blog which has been downloaded  before, ignore it
+                if let Some(local_blog_info) = local_blogs.get(postid) {
+                    return remote_blog_info.timestamp > local_blog_info.timestamp;
+                }
+                return false;
             })
             .map(|(_, blog_info)| -> BlogsInfoDO { blog_info })
             .collect();
