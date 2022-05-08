@@ -11,6 +11,7 @@ use regex::Regex;
 use rusqlite::{params, Connection, OpenFlags, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
+use walkdir::WalkDir;
 use xmlrpc::Error;
 
 use super::rpc::MetaWeblog;
@@ -93,13 +94,13 @@ impl Config {
         let categories = weblog.get_categories()?;
 
         // get "[随笔分类]%d[CNBLOG]" postid
-        let reg = Regex::new(r"[随笔分类](\d)+[CNBLOG]").unwrap();
+        let reg = Regex::new(r"\[随笔分类\](\d+)\[CNBLOG\]").unwrap();
         for category in categories {
             if reg.is_match(category.title.as_str()) {
                 let num = reg
                     .captures(category.title.as_str())
                     .unwrap()
-                    .get(0)
+                    .get(1)
                     .unwrap();
                 let num: i32 = num.as_str().parse().unwrap();
                 return Ok(num);
@@ -197,6 +198,13 @@ impl Config {
     pub fn download_blogs_info(&self) {
         self.download_blogs_info_to_path(self.blogs_info_cfg_path.as_path());
     }
+
+    /// force to increase cfg timestamp for downloading all blogs
+    pub fn force_increase_timestamp_to_download_blogs(&self) {
+        let local_conn = Connection::open(self.blogs_info_cfg_path.as_path()).unwrap();
+        local_conn.execute(r#"update BlogsInfo set timestamp = ? where postid=?"#, params![0, self.master_postid]).unwrap();
+    }
+
     fn download_blogs_info_to_path(&self, path: &Path) {
         // 1. download blogs info
         let post = self
@@ -332,6 +340,43 @@ impl Config {
             .map(|(_, blog)| -> BlogsInfoDO { blog })
             .collect();
         return new_blogs;
+    }
+
+    pub fn get_local_lost_blogs_info(&self, root_path: &str) -> Vec<BlogsInfoDO> {
+        // 1. query local database blogs
+        let local_blogs = self.query_blogs_existed_info_do(&self.local_conn);
+        
+        // 2. get local all paths
+        let mut local_paths = HashSet::<String>::new();
+        for entry in WalkDir::new(root_path).into_iter() {
+            let entry = entry.unwrap();
+            let path = entry.path().as_os_str().to_str().unwrap();
+            // convert windows path to linux path
+            if cfg!(target_family="windows") {
+                local_paths.insert(path.replace("\\", "/"));
+            }
+        }
+
+        // 3. find not exsited blog
+        let mut blogs_info = Vec::new();
+        for (_, blog_info) in local_blogs.into_iter() {
+            if !local_paths.contains(&blog_info.blog_path) {
+                // 3.1 create directory
+                let mut temp_path = blog_info.blog_path.as_str();
+                let mut path = PathBuf::from(root_path);
+                let tpath;
+                if cfg!(target_family="windows") {
+                    tpath = blog_info.blog_path.replace("/", "\\");
+                    temp_path = tpath.as_str();
+                }
+                path.push(temp_path);
+                path.pop();
+                fs::create_dir_all(path).unwrap();
+                // 3.2 record no exsited blog
+                blogs_info.push(blog_info);
+            }
+        }
+        blogs_info
     }
 
     fn query_blogs_existed_info_do(&self, conn: &Connection) -> BTreeMap<i32, BlogsInfoDO> {
@@ -564,7 +609,13 @@ mod config_test {
 
     #[test]
     fn test_check_account() {
-        let r = super::Config::check_account("cnblog_test", "kh8ZunWgqDbXTFc");
+        let r = super::Config::check_account("cnblog-test", "kh8ZunWgqDbXTFc");
         println!("{:?}", r);
+    }
+
+    #[test]
+    fn try_get_master_postid() {
+        let num = super::Config::try_get_master_postid("cnblog-test", "kh8ZunWgqDbXTFc");
+        dbg!(num);
     }
 }
