@@ -129,6 +129,7 @@ fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, loca
     let mut post = Post::default();
     post.description = file_content;
     post.categories.push(category.clone());
+    post.categories.push("[Markdown]".to_string());
     post.title = entry.path().file_name().unwrap().to_str().unwrap().to_string();
 
     // 2. check category else upload new category

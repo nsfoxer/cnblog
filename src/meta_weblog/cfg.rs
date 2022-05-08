@@ -463,7 +463,7 @@ impl Config {
         post.categories
             .push(format!("{}[CNBLOG]", self.master_postid));
         self.weblog
-            .edit_post(self.master_postid.to_string().as_str(), post, false)
+            .edit_post(self.master_postid.to_string().as_str(), post, true)
             .unwrap();
     }
 

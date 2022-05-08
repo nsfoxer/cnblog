@@ -196,8 +196,6 @@ impl MetaWeblog {
         for arg in args.into_iter() {
             request = request.arg(arg);
         }
-        let mut f = std::fs::File::create("2.xml").unwrap();
-        request.write_as_xml(&mut f).unwrap();
         request.call_url(self.url.as_str())
     }
 }
