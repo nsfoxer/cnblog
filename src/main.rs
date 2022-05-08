@@ -210,7 +210,9 @@ fn save_blogs_by_blogs_info(
 /// need to modify timestamp of new blog
 fn download_remote_new_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get new blogsinfo by comparing remote and local database
-    let blogs_info = cfg.get_remote_new_blogs_info();
+    let mut blogs_info = cfg.get_remote_new_blogs_info();
+    let blogs_info2 = cfg.get_local_lost_blogs_info(root_path);
+    blogs_info.extend(blogs_info2);
 
     // 2. download blog by postid and save
     println!("Info: find the following new file.");
@@ -336,6 +338,7 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
             base_path.to_str().unwrap(),
         );
         cfg.download_blogs_info();
+        cfg.force_increase_timestamp_to_download_blogs();
         postid = num;
     }
 
