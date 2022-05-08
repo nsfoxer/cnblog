@@ -3,7 +3,7 @@ extern crate xmlrpc;
 
 use crate::meta_weblog::weblog::WpCategory;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, create_dir};
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
@@ -52,7 +52,7 @@ fn main() {
         //todo!("update remote changed blog");
         update_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         //todo!("move remote deleted blog;");
-        delete_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
+        delete_remote_changed_blog(&cfg, blog_root_path_str);
         //todo!("overwrite local blogs database");
         cfg = overwrite_local_blogs_database(cfg);
     }
@@ -78,14 +78,16 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
     
     // 2. walk through a directory
     let blogs_info = cfg.get_local_existed_blogs_info();
+    let mut fs_blogs_path = HashSet::new();
     for entry in WalkDir::new(root_path).into_iter().filter_entry(|e| is_not_hidden_and_is_markdown(e)){
         let entry = entry.unwrap();
         if entry.path().is_dir() {
             continue;
         }
-
         let local_path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
         
+        fs_blogs_path.insert(local_path.to_string());
+
         // 2.1 upload new blog
         if !blogs_path.contains_key(local_path) {
             upload_new_blog(&entry, &cfg, weblog, local_path);
@@ -101,6 +103,26 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
             }
         }
     }
+
+    // 3. find deleted blogs and delete it
+    for blog_path in blogs_info.keys() {
+        if !fs_blogs_path.contains(blog_path) {
+            if let Some((_, postid)) = blogs_info.get(blog_path) {
+                delete_blog(blog_path, cfg, weblog, *postid);
+            }
+        }
+    }
+}
+
+/// Delete blog by postid and save info to database
+fn delete_blog(blog_path: &str, cfg: &Config, weblog: &mut MetaWeblog, postid: i32) {
+    // 1. delete remote blog
+    println!("Warning: delete remote blog {}", blog_path);
+    println!("Warning: because meta weblog can't delete post, please delete the file manually!!! File: {}, postid: {}.", blog_path, postid);
+    //weblog.delete_post(postid.to_string().as_str(), true).unwrap();
+
+    // 2. save database
+    cfg.delete_post(postid);
 }
 
 /// update changed local blog
@@ -258,9 +280,9 @@ fn delete_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, root_path: &str, del
 
 /// compare local and remote info to delete old blog
 /// Note: old blog will be moved to delete dir
-fn delete_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
+fn delete_remote_changed_blog(cfg: &Config,  root_path: &str) {
     // 1. get deleted blog by comparing remote and local database
-    let blogs_info = cfg.get_remote_changed_blogs_info();
+    let blogs_info = cfg.get_remote_deleted_blogs_info();
 
     // 2. delete(move) blog
     let deleted_root_path = Path::new(root_path)
