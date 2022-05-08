@@ -350,10 +350,12 @@ impl Config {
         let mut local_paths = HashSet::<String>::new();
         for entry in WalkDir::new(root_path).into_iter() {
             let entry = entry.unwrap();
-            let path = entry.path().as_os_str().to_str().unwrap();
+            let path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
             // convert windows path to linux path
             if cfg!(target_family="windows") {
                 local_paths.insert(path.replace("\\", "/"));
+            } else {
+                local_paths.insert(path.to_string());
             }
         }
 
@@ -398,7 +400,7 @@ impl Config {
             .to_string()
             + sql_suffix;
 
-        let mut stmt = self.local_conn.prepare(&sql).unwrap();
+        let mut stmt = conn.prepare(&sql).unwrap();
 
         // 2. get info
         let blogs = stmt
@@ -568,7 +570,7 @@ impl Config {
             .unwrap();
     }
 
-    /// update changed blogs' timestamp
+    /// update changed blog's timestamp
     pub fn edit_post(&self, postid: i32, timestamp: i64) {
         self.local_conn
             .execute(
@@ -576,6 +578,11 @@ impl Config {
                 params![timestamp, postid],
             )
             .unwrap();
+    }
+
+    /// delete blog by postid
+    pub fn delete_post(&self, postid: i32) {
+        self.local_conn.execute(r#"update BlogsInfo set deleted = 1 where postid = ?"#, [postid]).unwrap();
     }
 }
 
