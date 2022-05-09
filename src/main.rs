@@ -18,13 +18,13 @@ use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
 fn main() {
-    let base_path_str = "config/";
+    let base_path_str = "config";
     if let Err(e) = init_user_cfg(base_path_str) {
         eprintln!("{e}");
         exit(1);
     }
 
-    let blog_root_path_str = "articles/";
+    let blog_root_path_str = "articles";
 
     // get user info
     let base_path = Path::new(base_path_str);
@@ -85,12 +85,18 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
             continue;
         }
         let local_path = entry.path().strip_prefix(root_path).unwrap().as_os_str().to_str().unwrap();
+        let tlocal_path;
+        if cfg!(target_family="windows") {
+            tlocal_path = local_path.replace("\\", "/");
+        } else {
+            tlocal_path = local_path.to_string();
+        }
         
-        fs_blogs_path.insert(local_path.to_string());
+        fs_blogs_path.insert(tlocal_path.clone());
 
         // 2.1 upload new blog
-        if !blogs_path.contains_key(local_path) {
-            upload_new_blog(&entry, &cfg, weblog, local_path);
+        if !blogs_path.contains_key(tlocal_path.as_str()) {
+            upload_new_blog(&entry, &cfg, weblog, tlocal_path.as_str());
             continue;
         }
 
