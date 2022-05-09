@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Write, ErrorKind};
 use std::path::PathBuf;
 use std::{io::Read, path::Path};
 
@@ -479,7 +479,10 @@ impl Config {
             self.blogs_info_cfg_path.with_extension("bak"),
         )
         .unwrap();
-        fs::rename(&self.temp_data_file, self.blogs_info_cfg_path.as_path()).unwrap();
+        if let Err(e) = fs::rename(&self.temp_data_file, self.blogs_info_cfg_path.as_path()) {
+            eprintln!("Info: move file error: {e}");
+            fs::copy(&self.temp_data_file, self.blogs_info_cfg_path.as_path()).unwrap();
+        }
 
         // 3. renew datazase conn
         let local_conn = Connection::open(self.blogs_info_cfg_path.as_path()).unwrap();
