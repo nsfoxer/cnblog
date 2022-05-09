@@ -115,7 +115,7 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
 }
 
 /// Delete blog by postid and save info to database
-fn delete_blog(blog_path: &str, cfg: &Config, weblog: &mut MetaWeblog, postid: i32) {
+fn delete_blog(blog_path: &str, cfg: &Config, _weblog: &mut MetaWeblog, postid: i32) {
     // 1. delete remote blog
     println!("Warning: delete remote blog {}", blog_path);
     println!("Warning: because meta weblog can't delete post, please delete the file manually!!! File: {}, postid: {}.", blog_path, postid);
