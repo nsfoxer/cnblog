@@ -2,6 +2,7 @@
 name = "cnblog"
 version = "0.1.0"
 edition = "2021"
+authors = ["nsfoxer <muwuren@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -19,6 +20,8 @@ debug = true
 [dependencies]
 base64 = "0.13.0"
 chrono = "0.4.19"
+clap = { version="3.1.17", features=["derive"]}
+dirs = "4.0.0"
 filetime = "0.2.15"
 iso8601 = "0.4.1"
 proc-macro2 = "1.0.36"
