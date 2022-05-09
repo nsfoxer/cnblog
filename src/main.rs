@@ -308,9 +308,7 @@ fn delete_remote_changed_blog(cfg: &Config,  root_path: &str) {
 
     // 2. delete(move) blog
     let deleted_root_path = Path::new(root_path)
-        .parent()
-        .unwrap()
-        .join("cnblog_deleted");
+        .join(".cnblog_deleted");
     println!(
         "Warning: the following file will be moved to {}.",
         deleted_root_path.to_str().unwrap()
