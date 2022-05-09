@@ -8,6 +8,10 @@ edition = "2021"
 proc-macro = true
 path = "src/lib.rs"
 
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-gcc-ar"
+
 [profile.dev]
 opt-level = 0
 debug = true
@@ -20,7 +24,7 @@ iso8601 = "0.4.1"
 proc-macro2 = "1.0.36"
 quote = "1.0.15"
 regex = "1.5.4"
-rusqlite = "0.26.3"
+rusqlite = { version = "0.26.3", features = ["bundled"] }
 serde = {version = "1.0.136", features = ["derive"]}
 serde_json = "1.0.79"
 syn = "1.0.86"
