@@ -11,20 +11,36 @@ use std::process::exit;
 
 use walkdir::{WalkDir, DirEntry};
 use xmlrpc::Error;
+use clap::Parser;
+use dirs::config_dir;
 
 mod meta_weblog;
 use meta_weblog::cfg::{BlogsInfoDO, Config, Utility};
 use meta_weblog::rpc::MetaWeblog;
 use meta_weblog::weblog::{BlogInfo, CategoryInfo, Post};
 
+/// It's a cnblog's blog (markdown) note synchronization tool.
+#[derive(Parser)]
+#[clap(author, version, about)]
+struct Args {
+    /// Root path of articles
+    #[clap(short, long, default_value_t = String::from("articles"))]
+    rootpath: String,
+    
+    /// Config directory of cnblog
+    #[clap(short, long, default_value_t = String::from(config_dir().unwrap().join("cnblog").to_str().unwrap()))]
+    config: String,
+}
+
 fn main() {
-    let base_path_str = "config";
+    let args = Args::parse();
+    let base_path_str = args.config.as_str();
     if let Err(e) = init_user_cfg(base_path_str) {
         eprintln!("{e}");
         exit(1);
     }
 
-    let blog_root_path_str = "articles";
+    let blog_root_path_str = args.rootpath.as_str();
 
     // get user info
     let base_path = Path::new(base_path_str);
