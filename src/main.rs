@@ -107,20 +107,22 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
         } else {
             tlocal_path = local_path.to_string();
         }
-        
+        drop(local_path);
         fs_blogs_path.insert(tlocal_path.clone());
 
         // 2.1 upload new blog
         if !blogs_path.contains_key(tlocal_path.as_str()) {
+            println!("Will upload new blog: {}", tlocal_path.as_str());
             upload_new_blog(&entry, &cfg, weblog, tlocal_path.as_str());
             continue;
         }
 
         // 2.2 get changed blog
-        if let Some((old_timestamp, postid)) = blogs_info.get(local_path) {
+        if let Some((old_timestamp, postid)) = blogs_info.get(tlocal_path.as_str()) {
             // local timestamp is greater than the remote timestamp
             let new_timestamp = Utility::get_file_timestamp(entry.path());
             if new_timestamp > *old_timestamp{
+                println!("Will upload changed blog: {}", tlocal_path.as_str());
                 update_local_blog(&entry, cfg, weblog, new_timestamp, *postid);
             }
         }
@@ -130,7 +132,14 @@ fn sync_local_blogs_and_info(cfg: &Config, weblog: &mut MetaWeblog, root_path: &
     for blog_path in blogs_info.keys() {
         if !fs_blogs_path.contains(blog_path) {
             if let Some((_, postid)) = blogs_info.get(blog_path) {
-                delete_blog(blog_path, cfg, weblog, *postid);
+                let tblog_path;
+                if cfg!(target_family="windows") {
+                    tblog_path = blog_path.replace("/", "\\");
+                } else {
+                    tblog_path = blog_path.clone();
+                }
+                println!("Will delete(move) blog: {}", tblog_path.as_str());
+                delete_blog(tblog_path.as_str(), cfg, weblog, *postid);
             }
         }
     }
@@ -179,6 +188,7 @@ fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, loca
     // 2. check category else upload new category
     let categories = cfg.get_local_categories();
     if !categories.contains(&category) {
+        println!("New category: {}", category);
         // insert new category and upload category
         cfg.new_category(&category);
         let mut cate = WpCategory::default();
