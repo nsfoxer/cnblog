@@ -24,7 +24,7 @@ pub struct BlogInfo {
 
 impl Post {
     //  It's used to write macro
-    fn convert2(&mut self, a: Value) {
+    fn _convert2(&mut self, a: Value) {
         if let Value::Struct(a) = a {
             for (k, v) in a.into_iter() {
                 if k == "dateCreated" {
@@ -51,6 +51,7 @@ impl Post {
 #[allow(non_snake_case)]
 #[derive(Debug, Default, Clone, Convert)]
 pub struct Post {
+    pub postid: String,
     pub dateCreated: DateTime,
     pub description: String,
     pub title: String,
