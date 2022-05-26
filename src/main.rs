@@ -68,7 +68,7 @@ fn main() {
         //todo!("update remote changed blog");
         update_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         //todo!("move remote deleted blog;");
-        delete_remote_changed_blog(&cfg, blog_root_path_str);
+        delete_remote_changed_blog(&cfg, &mut weblog, blog_root_path_str);
         //todo!("overwrite local blogs database");
         cfg = overwrite_local_blogs_database(cfg);
     }
@@ -312,7 +312,7 @@ fn delete_blogs_by_blogs_info(blogs_info: Vec<BlogsInfoDO>, root_path: &str, del
 
 /// compare local and remote info to delete old blog
 /// Note: old blog will be moved to delete dir
-fn delete_remote_changed_blog(cfg: &Config,  root_path: &str) {
+fn delete_remote_changed_blog(cfg: &Config, weblog: &mut MetaWeblog, root_path: &str) {
     // 1. get deleted blog by comparing remote and local database
     let blogs_info = cfg.get_remote_deleted_blogs_info();
 
@@ -324,6 +324,7 @@ fn delete_remote_changed_blog(cfg: &Config,  root_path: &str) {
         deleted_root_path.to_str().unwrap()
     );
     for blog_info in blogs_info.iter() {
+        weblog.delete_post(blog_info.postid.to_string().as_str(), true).unwrap();
         println!("file: {}", blog_info.blog_path);
     }
     delete_blogs_by_blogs_info(blogs_info, root_path, deleted_root_path.to_str().unwrap());

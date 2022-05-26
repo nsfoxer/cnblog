@@ -166,10 +166,7 @@ impl MetaWeblog {
         Ok(result)
     }
 
-    // "2022年 02月 10日 星期四 16:07:15 CST" 
-    // Now the cnblog server could't delete articles by metaweblog
-    // Error: Fault 0: 'Command cannot be issued to a replica: UNLINK blog_v2_BlogPosts-532134'
-    #[deprecated]
+    /// Delete post by postid
     pub fn delete_post(&self, postid: &str, publish: bool) -> Result<bool, Error> {
         // 1. generate arguments
         let mut arguments = Vec::<Value>::new();
@@ -217,6 +214,16 @@ mod tests {
         let weblog = MetaWeblog::new("nsfoxer".to_string(), "440EVxFSCXylKg".to_string(), "123".to_string());
         let posts = weblog.get_recent_posts(100).unwrap();
         println!("{:?}", posts);
+    }
+
+    #[test]
+    fn delete_all_posts() {
+        let weblog = MetaWeblog::new("nsfoxer".to_string(), "Unknown".to_string(), "123".to_string());
+        let posts = weblog.get_recent_posts(999).unwrap();
+        for post in posts {
+            println!("{:?}", post);
+            weblog.delete_post(post.postid.as_str(), true).unwrap();
+        }
     }
 
     #[test]
