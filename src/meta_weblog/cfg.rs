@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::{Write, ErrorKind};
+use std::io::Write;
 use std::path::PathBuf;
 use std::{io::Read, path::Path};
 
