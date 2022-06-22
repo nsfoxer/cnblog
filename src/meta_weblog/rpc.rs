@@ -1,6 +1,9 @@
+use chrono::Timelike;
+use chrono::Datelike;
 use crate::meta_weblog::weblog::WpCategory;
 use crate::BlogInfo;
 use crate::CategoryInfo;
+use iso8601::DateTime;
 use xmlrpc::{Error, Request, Value};
 
 use super::weblog::Post;
@@ -35,7 +38,10 @@ impl MetaWeblog {
         }
     }
 
-    pub fn new_post(&self, post: Post, publish: bool) -> Result<String, Error> {
+    pub fn new_post(&self, mut post: Post, publish: bool) -> Result<String, Error> {
+        if post.dateCreated == DateTime::default() {
+            post.dateCreated = Self::get_now_time();
+        }
         // 1. geerate arguments
         let mut arguments = Vec::<Value>::new();
         arguments.push(Value::String(self.blogid.to_string()));
@@ -150,7 +156,10 @@ impl MetaWeblog {
         Ok(blog_infos)
     }
 
-    pub fn edit_post(&self, postid: &str, post: Post, publish: bool) -> Result<Value, Error> {
+    pub fn edit_post(&self, postid: &str, mut post: Post, publish: bool) -> Result<Value, Error> {
+        if post.dateCreated == DateTime::default() {
+            post.dateCreated = Self::get_now_time();
+        }
         // 1. generate parameters
         let mut arguments = Vec::<Value>::new();
         arguments.push(Value::String(postid.to_string()));
@@ -194,6 +203,12 @@ impl MetaWeblog {
             request = request.arg(arg);
         }
         request.call_url(self.url.as_str())
+    }
+
+    fn get_now_time() -> DateTime {
+        let now = chrono::Local::now();
+        let s = format!("{}-{:02}-{:02}T{:02}:{:02}:{:02}", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+        iso8601::datetime(s.as_str()).unwrap()
     }
 }
 
