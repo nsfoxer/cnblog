@@ -1,6 +1,7 @@
 extern crate filetime;
 extern crate xmlrpc;
 
+use chrono::Datelike;
 use crate::meta_weblog::weblog::WpCategory;
 use crate::meta_weblog::cfg::{BLOGS_INFO_CFG, USER_INFO_CFG};
 use std::collections::{BTreeMap, HashSet};
@@ -9,6 +10,7 @@ use std::io::{stdin, stdout, Write};
 use std::path::Path;
 use std::process::exit;
 
+use chrono::Timelike;
 use walkdir::{WalkDir, DirEntry};
 use xmlrpc::Error;
 use clap::Parser;
@@ -180,6 +182,9 @@ fn upload_new_blog(entry: &DirEntry, cfg: &Config, weblog: &mut MetaWeblog, loca
     let category = entry.path().parent().unwrap().file_name().unwrap().to_str().unwrap().to_string();
 
     let mut post = Post::default();
+    let now = chrono::Local::now();
+    let s = format!("{}-{:02}-{:02}T{:02}:{:02}:{:02}", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+    post.dateCreated = iso8601::datetime(s.as_str()).unwrap();
     post.description = file_content;
     post.categories.push(category.clone());
     post.categories.push("[Markdown]".to_string());
