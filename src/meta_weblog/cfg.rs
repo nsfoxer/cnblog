@@ -310,7 +310,8 @@ impl Config {
             return true;
         }
         if local_timestamp > remote_timestamp {
-            panic!("local blogs info is newer than remote");
+            eprintln!("local blogs info is newer than remote");
+            return true;
         }
         return false;
     }
