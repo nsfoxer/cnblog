@@ -199,6 +199,8 @@ impl MetaWeblog {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Datelike, Timelike};
+
     use super::{WpCategory, MetaWeblog};
     #[test]
     fn new_category() {
@@ -231,5 +233,14 @@ mod tests {
         let weblog = MetaWeblog::new("nsfoxer".to_string(), "440EVxFSCXylKg".to_string(), "123".to_string());
         let posts = weblog.delete_post("16252136",true).unwrap();
         println!("{:?}", posts);
+    }
+
+    #[test]
+    fn time_test() {
+        let now = chrono::Local::now();
+        let mut post = crate::Post::default();
+        let s = format!("{}-{:02}-{:02}T{:02}:{:02}:{:02}", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+        post.dateCreated = iso8601::datetime(s.as_str()).unwrap();
+        println!("{}", s);
     }
 }
