@@ -27,6 +27,7 @@ const MASTER_BLOGS_CFG: &str = "MASTER_CNBLOG_BLOGS_INFO_CFG";
 pub struct UserInfo {
     pub username: String,
     pub password: String,
+    pub app_key : String,
     pub blogid: String,
     pub postid: i32,
 }
@@ -51,6 +52,7 @@ impl Config {
     pub fn new(
         username: &str,
         password: &str,
+        app_key: &str,
         master_postid: i32,
         blogid: &str,
         base_path: &str,
@@ -60,6 +62,7 @@ impl Config {
             username.to_string(),
             password.to_string(),
             blogid.to_string(),
+            app_key.to_string(),
         );
 
         Config {
@@ -74,22 +77,24 @@ impl Config {
 
     /// check username and password valid!
     /// Return Error while user info is wrong, else return
-    pub fn check_account(username: &str, password: &str) -> Result<(), Error> {
+    pub fn check_account(username: &str, password: &str, app_key: &str) -> Result<(), Error> {
         let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
             username.to_string(),
+            app_key.to_string(),
         );
         weblog.get_users_blogs()?;
         Ok(())
     }
 
     /// try get master postid which that cantians blogs info
-    pub fn try_get_master_postid(username: &str, password: &str) -> Result<i32, Error> {
+    pub fn try_get_master_postid(username: &str, password: &str, app_key: &str) -> Result<i32, Error> {
         let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
             "123".to_string(),
+            app_key.to_string(),
         );
         let categories = weblog.get_categories()?;
 
@@ -148,12 +153,13 @@ impl Config {
 
     /// Upload a new blogs config file
     /// Will get a new postid for blogs info and generate a new category with postid
-    pub fn upload_new_blogs_cfg(username: &str, password: &str, blogs_path: &Path) -> i32 {
+    pub fn upload_new_blogs_cfg(username: &str, password: &str, app_key: &str, blogs_path: &Path) -> i32 {
         // 1. get a new postid for blogs
         let weblog = MetaWeblog::new(
             username.to_string(),
             password.to_string(),
             "123".to_string(),
+            app_key.to_string(),
         );
         let mut post = Post::default();
         post.title = "[CNBLOG]BLOGS_INFO_CFG".to_string();
@@ -239,7 +245,7 @@ impl Config {
     }
 
     /// Write user basic info
-    pub fn write_user_info_cfg(username: &str, password: &str, postid: i32, user_info_path: &Path) {
+    pub fn write_user_info_cfg(username: &str, password: &str, app_key: &str, postid: i32, user_info_path: &Path) {
         if user_info_path.exists() {
             println!(
                 "The {:?} file already exists!!!\nI'will overwrite it!",
@@ -251,6 +257,7 @@ impl Config {
             username.to_string(),
             password.to_string(),
             "123".to_string(),
+            app_key.to_string(),
         );
         let userblogs = weblog.get_users_blogs().unwrap();
         let userblog = userblogs.get(0).unwrap();
@@ -260,6 +267,7 @@ impl Config {
         let user_info = UserInfo {
             username: username.to_string(),
             password: password.to_string(),
+            app_key: app_key.to_string(),
             postid,
             blogid,
         };
@@ -623,13 +631,9 @@ mod config_test {
 
     #[test]
     fn test_check_account() {
-        let r = super::Config::check_account("cnblog-test", "kh8ZunWgqDbXTFc");
-        println!("{:?}", r);
     }
 
     #[test]
     fn try_get_master_postid() {
-        let num = super::Config::try_get_master_postid("cnblog-test", "kh8ZunWgqDbXTFc");
-        dbg!(num);
     }
 }

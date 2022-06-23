@@ -52,6 +52,7 @@ fn main() {
     let mut cfg = Config::new(
         &user_info.username,
         &user_info.password,
+        &user_info.app_key,
         user_info.postid,
         &user_info.blogid,
         base_path_str,
@@ -61,6 +62,7 @@ fn main() {
         user_info.username.to_string(),
         user_info.password.to_string(),
         user_info.blogid.to_string(),
+        user_info.app_key.to_string(),
     );
 
     // check blogs update
@@ -371,11 +373,11 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
     }
 
     // When false, we need to ask the user for their account and password
-    let (username, password) = ask_question();
-    Config::check_account(username.as_str(), password.as_str())?;
+    let (username, password, app_key) = ask_question();
+    Config::check_account(username.as_str(), password.as_str(), app_key.as_str())?;
 
     // Check whether the master postid exists
-    let num = Config::try_get_master_postid(&username, &password)?;
+    let num = Config::try_get_master_postid(&username, &password, &app_key)?;
     let blogs_path = base_path.join(BLOGS_INFO_CFG);
     let blogs_path = blogs_path.as_path();
     let postid;
@@ -383,13 +385,14 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
         // Not exists
         // Now we need to create a new blog info
         Config::init_blogs_cfg(blogs_path).unwrap();
-        postid = Config::upload_new_blogs_cfg(&username, &password, blogs_path);
+        postid = Config::upload_new_blogs_cfg(&username, &password, &app_key, blogs_path);
     } else {
         // Exists
         // Dowload BlogsInfo
         let cfg = Config::new(
             &username,
             &password,
+            &app_key,
             num,
             "123",
             base_path.to_str().unwrap(),
@@ -400,12 +403,12 @@ fn init_user_cfg(base_path: &str) -> Result<(), Error> {
     }
 
     // Save user info
-    Config::write_user_info_cfg(&username, &password, postid, &user_path);
+    Config::write_user_info_cfg(&username, &password, &app_key, postid, &user_path);
     Ok(())
 }
 
-/// ask username and password
-fn ask_question() -> (String, String) {
+/// ask username and password and app_key
+fn ask_question() -> (String, String, String) {
     // 1. print a prompt
     println!(
         "The user info config file was not founded!\
@@ -428,5 +431,14 @@ fn ask_question() -> (String, String) {
     stdin().read_line(&mut buf).unwrap();
     let password = buf.trim().to_string();
 
-    (username, password)
+    // 4. get app_key
+    print!("Please input your app_key: ");
+    stdout().flush().unwrap();
+    buf.clear();
+    stdin().read_line(&mut buf).unwrap();
+    let app_key = buf.trim().to_string();
+
+    println!("");
+
+    (username, password, app_key)
 }

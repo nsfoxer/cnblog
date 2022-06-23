@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use chrono::Timelike;
 use chrono::Datelike;
 use crate::meta_weblog::weblog::WpCategory;
@@ -28,13 +30,13 @@ pub struct MetaWeblog {
 
 impl MetaWeblog {
     // new
-    pub fn new(username: String, password: String, blogid: String) -> Self {
+    pub fn new(username: String, password: String, blogid: String, app_key: String) -> Self {
         MetaWeblog {
+            url: format!("{}/{}", SERVER_URL, app_key.as_str()),
             password,
             blogid,
-            username: username.clone().to_string(),
-            app_key: username.clone().to_string(),
-            url: format!("{}/{}", SERVER_URL, username),
+            app_key,
+            username,
         }
     }
 
@@ -202,6 +204,9 @@ impl MetaWeblog {
         for arg in args.into_iter() {
             request = request.arg(arg);
         }
+        let mut f = File::create("1.xml").unwrap();
+        
+        request.write_as_xml(&mut f).unwrap();
         request.call_url(self.url.as_str())
     }
 
@@ -217,9 +222,16 @@ mod tests {
     use chrono::{Datelike, Timelike};
 
     use super::{WpCategory, MetaWeblog};
+
+    #[test]
+    fn get_users_blogs() {
+        let weblog = MetaWeblog::new("上海的海是海未的海".to_string(), "63F4E40156E9BCE22EC53B951D1ED9D6D2855218E78DB9AE338B7FF63123BC0E".to_string(), "123".to_string(), "lunar-umi".to_string());
+        let a = weblog.get_users_blogs().unwrap();
+        dbg!(a);
+    }
     #[test]
     fn new_category() {
-        let weblog = MetaWeblog::new("nsfoxer".to_string(), "440EVxFSCXylKg".to_string(), "123".to_string());
+        let weblog = MetaWeblog::new("上海的海是海未的海".to_string(), "63F4E40156E9BCE22EC53B951D1ED9D6D2855218E78DB9AE338B7FF63123BC0E".to_string(), "123".to_string(), "lunar-umi".to_string());
         let mut category = WpCategory::default();
         category.name = "Cates".to_string();
         let a = weblog.new_category(category).unwrap();
@@ -228,14 +240,14 @@ mod tests {
 
     #[test]
     fn get_recent_posts() {
-        let weblog = MetaWeblog::new("nsfoxer".to_string(), "440EVxFSCXylKg".to_string(), "123".to_string());
+        let weblog = MetaWeblog::new("上海的海是海未的海".to_string(), "63F4E40156E9BCE22EC53B951D1ED9D6D2855218E78DB9AE338B7FF63123BC0E".to_string(), "123".to_string(), "lunar-umi".to_string());
         let posts = weblog.get_recent_posts(100).unwrap();
         println!("{:?}", posts);
     }
 
     #[test]
     fn delete_all_posts() {
-        let weblog = MetaWeblog::new("nsfoxer".to_string(), "Unknown".to_string(), "123".to_string());
+        let weblog = MetaWeblog::new("上海的海是海未的海".to_string(), "63F4E40156E9BCE22EC53B951D1ED9D6D2855218E78DB9AE338B7FF63123BC0E".to_string(), "123".to_string(), "lunar-umi".to_string());
         let posts = weblog.get_recent_posts(999).unwrap();
         for post in posts {
             println!("{:?}", post);
@@ -245,7 +257,7 @@ mod tests {
 
     #[test]
     fn delete_post() {
-        let weblog = MetaWeblog::new("nsfoxer".to_string(), "440EVxFSCXylKg".to_string(), "123".to_string());
+        let weblog = MetaWeblog::new("上海的海是海未的海".to_string(), "63F4E40156E9BCE22EC53B951D1ED9D6D2855218E78DB9AE338B7FF63123BC0E".to_string(), "123".to_string(), "lunar-umi".to_string());
         let posts = weblog.delete_post("16252136",true).unwrap();
         println!("{:?}", posts);
     }
